@@ -10,6 +10,7 @@ import { useContextBridgeStore } from '@proj-airi/stage-ui/stores/mods/api/conte
 import { useAiriCardStore } from '@proj-airi/stage-ui/stores/modules/airi-card'
 import { useOnboardingStore } from '@proj-airi/stage-ui/stores/onboarding'
 import { useSettings, useSettingsAudioDevice } from '@proj-airi/stage-ui/stores/settings'
+import { useVrmMotionsStore } from '@proj-airi/stage-ui/stores/vrm-motions'
 import { useTheme } from '@proj-airi/ui'
 import { StageTransitionGroup } from '@proj-airi/ui-transitions'
 import { storeToRefs } from 'pinia'
@@ -27,6 +28,7 @@ usePWAStore()
 const contextBridgeStore = useContextBridgeStore()
 const i18n = useI18n()
 const displayModelsStore = useDisplayModelsStore()
+const vrmMotionsStore = useVrmMotionsStore()
 const settingsStore = useSettings()
 const settings = storeToRefs(settingsStore)
 const onboardingStore = useOnboardingStore()
@@ -96,6 +98,7 @@ onMounted(async () => {
   characterOrchestratorStore.initialize()
 
   await displayModelsStore.loadDisplayModelsFromIndexedDB()
+  await vrmMotionsStore.loadVrmMotionsFromIndexedDB()
   await settingsStore.initializeStageModel()
   await settingsAudioDeviceStore.initialize()
 

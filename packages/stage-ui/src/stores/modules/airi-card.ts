@@ -42,6 +42,10 @@ export interface AiriExtension {
       url?: string // Example: "https://example.com/live2d/model.json"
     }
 
+    vrmMotion?: {
+      idleMotionId?: string
+    }
+
     // ID from display-models store (e.g. 'preset-live2d-1', 'display-model-<nanoid>')
     displayModelId?: string
   }
@@ -156,6 +160,7 @@ export const useAiriCardStore = defineStore('airi-card', () => {
           language: existingExtension.modules?.speech?.language,
         },
         vrm: existingExtension.modules?.vrm,
+        vrmMotion: existingExtension.modules?.vrmMotion,
         live2d: existingExtension.modules?.live2d,
         displayModelId: existingExtension.modules?.displayModelId ?? defaultModules.displayModelId,
       },

@@ -16,6 +16,7 @@ import { useAiriCardStore } from '@proj-airi/stage-ui/stores/modules/airi-card'
 import { usePerfTracerBridgeStore } from '@proj-airi/stage-ui/stores/perf-tracer-bridge'
 import { listProvidersForPluginHost, shouldPublishPluginHostCapabilities } from '@proj-airi/stage-ui/stores/plugin-host-capabilities'
 import { useSettings, useSettingsAudioDevice } from '@proj-airi/stage-ui/stores/settings'
+import { useVrmMotionsStore } from '@proj-airi/stage-ui/stores/vrm-motions'
 import { useTheme } from '@proj-airi/ui'
 import { storeToRefs } from 'pinia'
 import { onMounted, onUnmounted, watch } from 'vue'
@@ -51,6 +52,7 @@ const { isDark: dark } = useTheme()
 const i18n = useI18n()
 const contextBridgeStore = useContextBridgeStore()
 const displayModelsStore = useDisplayModelsStore()
+const vrmMotionsStore = useVrmMotionsStore()
 const settingsStore = useSettings()
 const { language, themeColorsHue, themeColorsHueDynamic } = storeToRefs(settingsStore)
 const serverChannelSettingsStore = useServerChannelSettingsStore()
@@ -129,6 +131,7 @@ onMounted(async () => {
 
   await chatSessionStore.initialize()
   await displayModelsStore.loadDisplayModelsFromIndexedDB()
+  await vrmMotionsStore.loadVrmMotionsFromIndexedDB()
   await settingsStore.initializeStageModel()
   await settingsAudioDeviceStore.initialize()
 

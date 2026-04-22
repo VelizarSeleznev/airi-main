@@ -10,6 +10,7 @@ import { useConsciousnessStore } from '@proj-airi/stage-ui/stores/modules/consci
 import { useSpeechStore } from '@proj-airi/stage-ui/stores/modules/speech'
 import { useProvidersStore } from '@proj-airi/stage-ui/stores/providers'
 import { useSettingsStageModel } from '@proj-airi/stage-ui/stores/settings/stage-model'
+import { useVrmMotionsStore } from '@proj-airi/stage-ui/stores/vrm-motions'
 import { Button, FieldInput, FieldValues } from '@proj-airi/ui'
 import { ComboboxSelect } from '@proj-airi/ui/components/form'
 import { storeToRefs } from 'pinia'
@@ -42,11 +43,13 @@ const speechStore = useSpeechStore()
 const providersStore = useProvidersStore()
 const displayModelsStore = useDisplayModelsStore()
 const stageModelStore = useSettingsStageModel()
+const vrmMotionsStore = useVrmMotionsStore()
 
 const { activeProvider: consciousnessProvider, activeModel: defaultConsciousnessModel } = storeToRefs(consciousnessStore)
 const { activeSpeechProvider: speechProvider, activeSpeechModel: defaultSpeechModel, activeSpeechVoiceId: defaultSpeechVoiceId } = storeToRefs(speechStore)
 const { displayModels } = storeToRefs(displayModelsStore)
 const { stageModelSelected: defaultDisplayModelId } = storeToRefs(stageModelStore)
+const { vrmMotions } = storeToRefs(vrmMotionsStore)
 
 // Determine if we're in edit mode
 const isEditMode = computed(() => !!props.cardId)
@@ -58,12 +61,20 @@ const selectedSpeechProvider = ref<string>('')
 const selectedSpeechModel = ref<string>('')
 const selectedSpeechVoiceId = ref<string>('')
 const selectedDisplayModelId = ref<string>('')
+const selectedIdleVrmMotionId = ref<string>('')
 
 // Computed: available display model options
 const displayModelOptions = computed(() =>
   displayModels.value.map(model => ({
     value: model.id,
     label: model.name,
+  })),
+)
+
+const vrmMotionOptions = computed(() =>
+  vrmMotions.value.map(motion => ({
+    value: motion.id,
+    label: motion.name,
   })),
 )
 
@@ -269,6 +280,9 @@ function saveCard(card: Card): boolean {
             model: selectedSpeechModel.value || defaultSpeechModel.value,
             voice_id: selectedSpeechVoiceId.value || defaultSpeechVoiceId.value,
           },
+          vrmMotion: {
+            idleMotionId: selectedIdleVrmMotionId.value || undefined,
+          },
           displayModelId: selectedDisplayModelId.value || defaultDisplayModelId.value,
         },
         agents: {},
@@ -304,6 +318,7 @@ function initializeCard(): Card {
   selectedSpeechModel.value = airiExt?.modules?.speech?.model || defaultSpeechModel.value
   selectedSpeechVoiceId.value = airiExt?.modules?.speech?.voice_id || defaultSpeechVoiceId.value
   selectedDisplayModelId.value = airiExt?.modules?.displayModelId || defaultDisplayModelId.value
+  selectedIdleVrmMotionId.value = airiExt?.modules?.vrmMotion?.idleMotionId || ''
 
   // Return existing card data or defaults
   if (existingCard) {
@@ -533,6 +548,19 @@ function getDefaultPlaceholder(defaultValue: string | undefined): string {
                   v-model="selectedDisplayModelId"
                   :options="displayModelOptions"
                   :placeholder="getDefaultPlaceholder(defaultDisplayModelId)"
+                  class="w-full"
+                />
+              </div>
+
+              <div :class="['flex', 'flex-col', 'gap-2', 'sm:col-span-2']">
+                <label :class="['flex', 'flex-row', 'items-center', 'gap-2', 'text-sm', 'text-neutral-500', 'dark:text-neutral-400']">
+                  <div i-lucide:play />
+                  VRM idle animation
+                </label>
+                <ComboboxSelect
+                  v-model="selectedIdleVrmMotionId"
+                  :options="vrmMotionOptions"
+                  placeholder="Use built-in idle_loop"
                   class="w-full"
                 />
               </div>

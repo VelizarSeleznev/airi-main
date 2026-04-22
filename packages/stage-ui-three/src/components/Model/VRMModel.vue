@@ -8,6 +8,7 @@
 
 import type { VRM } from '@pixiv/three-vrm'
 import type {
+  AnimationAction,
   Group,
   Material,
   Object3D,
@@ -15,6 +16,7 @@ import type {
   ShaderMaterial,
   SphericalHarmonics3,
   Texture,
+
   WebGLRenderer,
 } from 'three'
 import type { Ref, WatchStopHandle } from 'vue'
@@ -36,6 +38,8 @@ import { until, useMouse } from '@vueuse/core'
 import {
   AnimationMixer,
   Box3,
+  LoopOnce,
+  LoopRepeat,
   MathUtils,
   Mesh,
   MeshPhysicalMaterial,
@@ -185,7 +189,10 @@ let stopCameraWatch: WatchStopHandle | undefined
 
 // Animation related ref
 const vrmAnimationMixer = ref<AnimationMixer>()
+const currentAnimationAction = ref<AnimationAction>()
 const { onBeforeRender, stop, start } = useLoop()
+let motionPlaybackSequence = 0
+let disposeAnimationFinishedListener: (() => void) | undefined
 
 const vrmHooks: readonly VrmHook[] = resolveInternalVrmHooks()
 type VrmFrameRuntimeHook = (vrm: VRM, delta: number) => void
@@ -298,6 +305,7 @@ function getActiveManagedVrmInstance() {
 }
 
 function clearActiveManagedVrmRefs() {
+  currentAnimationAction.value = undefined
   vrmAnimationMixer.value = undefined
   vrmEmote.value = undefined
   vrm.value = undefined
@@ -493,6 +501,64 @@ function bindManagedVrmInstanceRenderLoop() {
   }).off
 }
 
+async function playAnimationUrl(
+  animationUrl: string,
+  options: {
+    loop?: boolean
+    restoreIdleOnFinish?: boolean
+  } = {},
+) {
+  const activeVrm = vrm.value
+  if (!activeVrm)
+    return false
+
+  const animation = await loadVRMAnimation(animationUrl)
+  const clip = await clipFromVRMAnimation(activeVrm, animation)
+  if (!clip) {
+    console.warn(`[VRMModel] Failed to load VRM animation clip: ${animationUrl}`)
+    return false
+  }
+
+  reAnchorRootPositionTrack(clip, activeVrm)
+
+  const mixer = vrmAnimationMixer.value ?? new AnimationMixer(activeVrm.scene)
+  vrmAnimationMixer.value = mixer
+
+  disposeAnimationFinishedListener?.()
+  disposeAnimationFinishedListener = undefined
+
+  currentAnimationAction.value?.stop()
+  mixer.stopAllAction()
+
+  const action = mixer.clipAction(clip)
+  action.reset()
+  action.clampWhenFinished = !options.loop
+  action.enabled = true
+  action.setLoop(options.loop ? LoopRepeat : LoopOnce, options.loop ? Infinity : 1)
+  action.play()
+  currentAnimationAction.value = action
+
+  if (options.restoreIdleOnFinish) {
+    const playbackToken = ++motionPlaybackSequence
+    const onFinished = () => {
+      if (playbackToken !== motionPlaybackSequence)
+        return
+
+      void playAnimationUrl(idleAnimation.value, { loop: true })
+    }
+
+    mixer.addEventListener('finished', onFinished)
+    disposeAnimationFinishedListener = () => {
+      mixer.removeEventListener('finished', onFinished)
+    }
+  }
+  else {
+    motionPlaybackSequence += 1
+  }
+
+  return true
+}
+
 function commitManagedVrmInstance(instance: ManagedVrmInstance) {
   scene.value?.add(instance.group)
   applyManagedVrmInstance(instance)
@@ -531,6 +597,8 @@ function componentCleanUp(
 
   disposeBeforeRenderLoop?.()
   disposeBeforeRenderLoop = undefined
+  disposeAnimationFinishedListener?.()
+  disposeAnimationFinishedListener = undefined
 
   if (activeInstance)
     detachVrmGroup(activeInstance.group)
@@ -821,7 +889,10 @@ async function loadModel() {
 
     // play animation
     nextVrmAnimationMixer = new AnimationMixer(_vrm.scene)
-    nextVrmAnimationMixer.clipAction(clip).play()
+    const initialAction = nextVrmAnimationMixer.clipAction(clip)
+    initialAction.setLoop(LoopRepeat, Infinity)
+    initialAction.play()
+    currentAnimationAction.value = initialAction
 
     nextVrmEmote = useVRMEmote(_vrm)
 
@@ -967,6 +1038,12 @@ onMounted(async () => {
       start()
     }
   }, { immediate: true })
+  watch(idleAnimation, async (nextIdleAnimation, previousIdleAnimation) => {
+    if (!modelLoaded.value || !vrm.value || !nextIdleAnimation || nextIdleAnimation === previousIdleAnimation)
+      return
+
+    await playAnimationUrl(nextIdleAnimation, { loop: true })
+  })
   // update model position
   watch(modelOffset, () => {
     if (vrmGroup.value) {
@@ -1052,6 +1129,8 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  disposeAnimationFinishedListener?.()
+  disposeAnimationFinishedListener = undefined
   componentCleanUp('component-unmount')
 })
 
@@ -1071,6 +1150,9 @@ defineExpose({
   // stage-ui-three's own model/material lifecycle extensions.
   setVrmFrameHook(hook?: VrmFrameRuntimeHook) {
     vrmFrameRuntimeHook.value = hook
+  },
+  async playAnimation(animationUrl: string, options?: { loop?: boolean, restoreIdleOnFinish?: boolean }) {
+    return playAnimationUrl(animationUrl, options)
   },
   scene: computed(() => vrm.value?.scene),
   lookAtUpdate(target: Vec3) {

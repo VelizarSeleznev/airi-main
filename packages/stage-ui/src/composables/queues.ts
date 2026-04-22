@@ -1,6 +1,6 @@
 import type { UseQueueReturn } from '@proj-airi/stream-kit'
 
-import type { Emotion, EmotionPayload } from '../constants/emotions'
+import type { Emotion, EmotionPayload, MotionPayload } from '../constants/emotions'
 
 import { sleep } from '@moeru/std'
 import { createQueue } from '@proj-airi/stream-kit'
@@ -22,11 +22,10 @@ export function useEmotionsMessageQueue(emotionsQueue: UseQueueReturn<EmotionPay
   }
 
   function parseActEmotion(content: string) {
-    const match = /<\|ACT\s*(?::\s*)?(\{[\s\S]*\})\|>/i.exec(content)
-    if (!match)
+    const payloadText = getActPayloadText(content)
+    if (!payloadText)
       return { ok: false, emotion: null as EmotionPayload | null }
 
-    const payloadText = match[1]
     try {
       const payload = JSON.parse(payloadText) as { emotion?: unknown }
       const emotion = payload?.emotion
@@ -59,6 +58,63 @@ export function useEmotionsMessageQueue(emotionsQueue: UseQueueReturn<EmotionPay
         if (actParsed.ok && actParsed.emotion) {
           ctx.emit('emotion', actParsed.emotion)
           emotionsQueue.enqueue(actParsed.emotion)
+        }
+      },
+    ],
+  })
+}
+
+export function useMotionsMessageQueue(motionsQueue: UseQueueReturn<MotionPayload>) {
+  function parseActMotion(content: string) {
+    const payloadText = getActPayloadText(content)
+    if (!payloadText)
+      return { ok: false, motion: null as MotionPayload | null }
+
+    try {
+      const payload = JSON.parse(payloadText) as { motion?: unknown }
+      const motion = payload?.motion
+
+      if (typeof motion === 'string' && motion.trim()) {
+        return {
+          ok: true,
+          motion: {
+            name: motion.trim(),
+          },
+        }
+      }
+
+      if (motion && typeof motion === 'object' && !Array.isArray(motion)) {
+        const name = 'name' in motion && typeof (motion as { name?: unknown }).name === 'string'
+          ? (motion as { name: string }).name.trim()
+          : ''
+
+        if (name) {
+          return {
+            ok: true,
+            motion: {
+              name,
+              loop: 'loop' in motion && typeof (motion as { loop?: unknown }).loop === 'boolean'
+                ? (motion as { loop?: boolean }).loop
+                : undefined,
+            },
+          }
+        }
+      }
+    }
+    catch (e) {
+      console.warn(`[parseActMotion] Failed to parse ACT payload JSON: "${payloadText}"`, e)
+    }
+
+    return { ok: false, motion: null as MotionPayload | null }
+  }
+
+  return createQueue<string>({
+    handlers: [
+      async (ctx) => {
+        const actParsed = parseActMotion(ctx.data)
+        if (actParsed.ok && actParsed.motion) {
+          ctx.emit('motion', actParsed.motion)
+          motionsQueue.enqueue(actParsed.motion)
         }
       },
     ],
@@ -110,4 +166,9 @@ export function useDelayMessageQueue() {
       },
     ],
   })
+}
+
+function getActPayloadText(content: string) {
+  const match = /<\|ACT\s*(?::\s*)?(\{[\s\S]*\})\|>/i.exec(content)
+  return match?.[1]
 }

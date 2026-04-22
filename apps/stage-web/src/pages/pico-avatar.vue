@@ -21,6 +21,7 @@ import { useOnboardingStore } from '@proj-airi/stage-ui/stores/onboarding'
 import { useProvidersStore } from '@proj-airi/stage-ui/stores/providers'
 import { useSettings } from '@proj-airi/stage-ui/stores/settings'
 import { useSpeechRuntimeStore } from '@proj-airi/stage-ui/stores/speech-runtime'
+import { useVrmMotionsStore } from '@proj-airi/stage-ui/stores/vrm-motions'
 import { getDefaultKokoroModel } from '@proj-airi/stage-ui/workers/kokoro/constants'
 import { BasicTextarea } from '@proj-airi/ui'
 import { breakpointsTailwind, useBreakpoints, useMouse } from '@vueuse/core'
@@ -87,6 +88,8 @@ const consciousnessStore = useConsciousnessStore()
 const speechStore = useSpeechStore()
 const speechRuntimeStore = useSpeechRuntimeStore()
 const displayModelsStore = useDisplayModelsStore()
+const vrmMotionsStore = useVrmMotionsStore()
+const stageRef = ref<InstanceType<typeof WidgetStage>>()
 
 const { messages } = storeToRefs(chatSession)
 const { streamingMessage } = storeToRefs(chatStream)
@@ -96,7 +99,8 @@ const { activeSpeechProvider, activeSpeechModel, activeSpeechVoiceId, isLoadingS
 const { providers } = storeToRefs(providersStore)
 const { stageModelSelected, stageModelRenderer, stageModelSelectedDisplayModel } = storeToRefs(settingsStore)
 const { displayModels } = storeToRefs(displayModelsStore)
-const { activeCardId, systemPrompt } = storeToRefs(airiCardStore)
+const { vrmMotions } = storeToRefs(vrmMotionsStore)
+const { activeCard, activeCardId, systemPrompt } = storeToRefs(airiCardStore)
 
 const messageInput = ref('')
 const bootstrapPending = ref(true)
@@ -119,6 +123,9 @@ const picoclawBridgeStatus = ref<PicoClawBridgeStatus | null>(null)
 const runtimeLogs = ref<Array<{ at: string, level: 'info' | 'warn' | 'error', message: string }>>([])
 const avatarUploadError = ref<string | null>(null)
 const avatarUploadPending = ref(false)
+const vrmMotionUploadError = ref<string | null>(null)
+const vrmMotionUploadPending = ref(false)
+const selectedVrmMotionId = ref('')
 const fastReplyText = ref('')
 const fastReplyMode = ref<'idle' | 'pending' | 'agent' | 'chat'>('idle')
 const visibleStatusText = ref('')
@@ -153,6 +160,14 @@ const voiceConfigured = computed(() => {
 })
 const availableSpeechVoices = computed(() => speechStore.availableVoices[selectedSpeechProvider.value] || [])
 const selectedAvatarName = computed(() => stageModelSelectedDisplayModel.value?.name || stageModelSelected.value || 'none')
+const selectedVrmMotionName = computed(() => vrmMotions.value.find(motion => motion.id === selectedVrmMotionId.value)?.name || selectedVrmMotionId.value || 'none')
+const activeCardIdleVrmMotionName = computed(() => {
+  const idleMotionId = activeCard.value?.extensions?.airi?.modules?.vrmMotion?.idleMotionId
+  if (!idleMotionId)
+    return 'idle_loop'
+
+  return vrmMotions.value.find(motion => motion.id === idleMotionId)?.name || idleMotionId
+})
 const logsText = computed(() => runtimeLogs.value.map(log => `[${log.at}] ${log.level.toUpperCase()} ${log.message}`).join('\n'))
 const streamingContent = computed(() => streamingMessage.value.content || '')
 const streamingPreview = computed(() => (streamingContent.value || fastReplyText.value).slice(-500))
@@ -554,6 +569,94 @@ async function handleAvatarUpload(event: Event, format: DisplayModelFormat) {
   }
 }
 
+async function handleVrmMotionUpload(event: Event) {
+  const input = event.target as HTMLInputElement
+  const files = Array.from(input.files ?? [])
+  input.value = ''
+
+  if (files.length === 0)
+    return
+
+  vrmMotionUploadError.value = null
+  vrmMotionUploadPending.value = true
+
+  try {
+    let lastImportedMotionId = ''
+
+    for (const file of files) {
+      if (!file.name.toLowerCase().endsWith('.vrma'))
+        throw new Error(`Expected .vrma file, got ${file.name}.`)
+
+      appendLog('info', `Importing VRM motion: ${file.name}`)
+      const motion = await vrmMotionsStore.addVrmMotion(file)
+      lastImportedMotionId = motion.id
+    }
+
+    if (lastImportedMotionId) {
+      selectedVrmMotionId.value = lastImportedMotionId
+      appendLog('info', `VRM motion import applied: ${selectedVrmMotionName.value}`)
+    }
+  }
+  catch (error) {
+    vrmMotionUploadError.value = error instanceof Error ? error.message : String(error)
+    appendLog('error', `VRM motion import failed: ${vrmMotionUploadError.value}`)
+  }
+  finally {
+    vrmMotionUploadPending.value = false
+  }
+}
+
+async function handlePlaySelectedVrmMotion() {
+  if (!selectedVrmMotionId.value) {
+    vrmMotionUploadError.value = 'Select a VRM motion first.'
+    appendLog('warn', vrmMotionUploadError.value)
+    return
+  }
+
+  const played = await stageRef.value?.playMotionById?.(selectedVrmMotionId.value, {
+    loop: false,
+    restoreIdleOnFinish: true,
+  })
+
+  if (!played) {
+    vrmMotionUploadError.value = `Failed to play VRM motion: ${selectedVrmMotionName.value}`
+    appendLog('error', vrmMotionUploadError.value)
+    return
+  }
+
+  vrmMotionUploadError.value = null
+  appendLog('info', `VRM motion preview started: ${selectedVrmMotionName.value}`)
+}
+
+function handleApplySelectedMotionToCard() {
+  if (!activeCard.value || !activeCardId.value || !selectedVrmMotionId.value) {
+    vrmMotionUploadError.value = 'An active AIRI card and selected VRM motion are required.'
+    appendLog('warn', vrmMotionUploadError.value)
+    return
+  }
+
+  const nextCard = {
+    ...activeCard.value,
+    extensions: {
+      ...activeCard.value.extensions,
+      airi: {
+        ...activeCard.value.extensions.airi,
+        modules: {
+          ...activeCard.value.extensions.airi.modules,
+          vrmMotion: {
+            ...activeCard.value.extensions.airi.modules.vrmMotion,
+            idleMotionId: selectedVrmMotionId.value,
+          },
+        },
+      },
+    },
+  }
+
+  airiCardStore.updateCard(activeCardId.value, nextCard)
+  vrmMotionUploadError.value = null
+  appendLog('info', `Active AIRI card idle motion set to ${selectedVrmMotionName.value}`)
+}
+
 function setupVoiceInputSupport() {
   if (typeof window === 'undefined')
     return
@@ -631,6 +734,7 @@ async function bootstrapPrototype() {
     stageModelSelected.value = 'preset-live2d-1'
   await displayModelsStore.initialize()
   await displayModelsStore.loadDisplayModelsFromIndexedDB()
+  await vrmMotionsStore.loadVrmMotionsFromIndexedDB()
   await settingsStore.initializeStageModel()
   appendLog('info', `Avatar ready: ${selectedAvatarName.value} (${stageModelRenderer.value || 'disabled'})`)
 
@@ -1037,6 +1141,11 @@ watch(fastReplyText, (content) => {
     appendLog('info', `First fast-layer token after ${llmTraceFirstTokenMs.value}ms`)
   }
 })
+
+watch(vrmMotions, (motions) => {
+  if (!selectedVrmMotionId.value && motions.length > 0)
+    selectedVrmMotionId.value = motions[0]!.id
+}, { immediate: true })
 </script>
 
 <template>
@@ -1076,6 +1185,7 @@ watch(fastReplyText, (content) => {
         </div>
 
         <WidgetStage
+          ref="stageRef"
           chat-speech-mode="off"
           :paused="false"
           :focus-at="{
@@ -1156,6 +1266,9 @@ watch(fastReplyText, (content) => {
           <p v-if="avatarUploadError" class="rounded-2xl bg-red-500/10 px-3 py-2 text-red-700 dark:text-red-200">
             {{ avatarUploadError }}
           </p>
+          <p v-if="vrmMotionUploadError" class="rounded-2xl bg-red-500/10 px-3 py-2 text-red-700 dark:text-red-200">
+            {{ vrmMotionUploadError }}
+          </p>
         </div>
 
         <div class="grid mt-4 gap-3 border border-neutral-200/70 rounded-3xl bg-white/45 p-3 text-xs dark:border-neutral-800 dark:bg-neutral-900/45">
@@ -1215,6 +1328,67 @@ watch(fastReplyText, (content) => {
                 @change="event => void handleAvatarUpload(event, DisplayModelFormat.VRM)"
               >
               <span>{{ avatarUploadPending ? 'Importing…' : 'Upload VRM .vrm' }}</span>
+            </label>
+          </div>
+
+          <div class="grid gap-3 border border-neutral-200/70 rounded-2xl bg-white/45 p-3 dark:border-neutral-800 dark:bg-neutral-900/45">
+            <div class="flex items-center justify-between gap-3">
+              <div>
+                <p class="text-sm font-medium">
+                  VRM motions
+                </p>
+                <p class="text-[0.7rem] text-neutral-500 dark:text-neutral-400">
+                  Preview clips manually or assign the current selection as the active card idle animation.
+                </p>
+              </div>
+              <span class="rounded-full bg-neutral-900/6 px-2.5 py-1 text-[0.65rem] tracking-[0.18em] uppercase dark:bg-white/8">
+                card idle: {{ activeCardIdleVrmMotionName }}
+              </span>
+            </div>
+
+            <label class="space-y-1">
+              <span class="text-neutral-500 dark:text-neutral-400">Motion clip</span>
+              <select
+                v-model="selectedVrmMotionId"
+                class="w-full border border-neutral-200 rounded-2xl bg-white/80 px-3 py-2 outline-none dark:border-neutral-800 dark:bg-neutral-950"
+              >
+                <option
+                  v-for="motion in vrmMotions"
+                  :key="motion.id"
+                  :value="motion.id"
+                >
+                  {{ motion.name }}
+                </option>
+              </select>
+            </label>
+
+            <div class="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                class="rounded-2xl bg-neutral-950 px-3 py-2 text-white transition dark:bg-white hover:bg-neutral-800 dark:text-neutral-950 dark:hover:bg-neutral-100"
+                @click="void handlePlaySelectedVrmMotion()"
+              >
+                Preview motion
+              </button>
+              <button
+                type="button"
+                class="border border-neutral-300 rounded-2xl px-3 py-2 text-neutral-800 transition dark:border-neutral-700 hover:bg-neutral-100 dark:text-neutral-100 dark:hover:bg-neutral-800"
+                @click="handleApplySelectedMotionToCard"
+              >
+                Use as card idle
+              </button>
+            </div>
+
+            <label class="flex cursor-pointer items-center justify-center border border-neutral-300 rounded-2xl border-dashed bg-white/60 px-3 py-2 text-center transition dark:border-neutral-700 dark:bg-neutral-950/70 hover:bg-white/90 dark:hover:bg-neutral-900">
+              <input
+                type="file"
+                accept=".vrma"
+                multiple
+                class="hidden"
+                :disabled="vrmMotionUploadPending"
+                @change="event => void handleVrmMotionUpload(event)"
+              >
+              <span>{{ vrmMotionUploadPending ? 'Importing…' : 'Upload VRM .vrma' }}</span>
             </label>
           </div>
 

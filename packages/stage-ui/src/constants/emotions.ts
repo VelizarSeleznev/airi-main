@@ -50,3 +50,8 @@ export interface EmotionPayload {
   name: Emotion
   intensity: number
 }
+
+export interface MotionPayload {
+  name: string
+  loop?: boolean
+}

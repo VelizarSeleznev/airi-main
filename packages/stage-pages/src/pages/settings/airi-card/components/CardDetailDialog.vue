@@ -6,6 +6,7 @@ import DOMPurify from 'dompurify'
 import { useAiriCardStore } from '@proj-airi/stage-ui/stores/modules/airi-card'
 import { useConsciousnessStore } from '@proj-airi/stage-ui/stores/modules/consciousness'
 import { useSpeechStore } from '@proj-airi/stage-ui/stores/modules/speech'
+import { useVrmMotionsStore } from '@proj-airi/stage-ui/stores/vrm-motions'
 import { Button } from '@proj-airi/ui'
 import { storeToRefs } from 'pinia'
 import {
@@ -34,10 +35,12 @@ const { t } = useI18n()
 const cardStore = useAiriCardStore()
 const consciousnessStore = useConsciousnessStore()
 const speechStore = useSpeechStore()
+const vrmMotionsStore = useVrmMotionsStore()
 const { removeCard } = cardStore
 const { activeCardId } = storeToRefs(cardStore)
 const { activeProvider: consciousnessProvider, activeModel: defaultConsciousnessModel } = storeToRefs(consciousnessStore)
 const { activeSpeechProvider: speechProvider, activeSpeechModel: defaultSpeechModel, activeSpeechVoiceId: defaultVoiceId } = storeToRefs(speechStore)
+const { vrmMotions } = storeToRefs(vrmMotionsStore)
 
 // Get selected card data
 const selectedCard = computed<AiriCard | undefined>(() => {
@@ -55,16 +58,20 @@ const moduleSettings = computed(() => {
       speechProvider: '',
       speech: '',
       voice: '',
+      idleVrmMotion: '',
     }
   }
 
   const airiExt = selectedCard.value.extensions.airi.modules
+  const idleMotionId = airiExt.vrmMotion?.idleMotionId || ''
+  const idleMotionName = vrmMotions.value.find(motion => motion.id === idleMotionId)?.name || idleMotionId
   return {
     consciousnessProvider: airiExt.consciousness?.provider || '',
     consciousness: airiExt.consciousness?.model || '',
     speechProvider: airiExt.speech?.provider || '',
     speech: airiExt.speech?.model || '',
     voice: airiExt.speech?.voice_id || '',
+    idleVrmMotion: idleMotionName,
   }
 })
 
@@ -386,6 +393,23 @@ function getModuleDisplayValue(value: string | undefined, defaultValue: string |
                   </span>
                   <div truncate font-medium>
                     {{ getModuleDisplayValue(moduleSettings.voice, defaultVoiceId) }}
+                  </div>
+                </div>
+
+                <div
+                  flex="~ col"
+                  bg="white/60 dark:black/30"
+                  gap-2 rounded-lg p-3
+                  border="~ neutral-200/50 dark:neutral-700/30"
+                  transition="all duration-200"
+                  hover="bg-white/80 dark:bg-black/40"
+                >
+                  <span flex="~ row" items-center gap-2 text-sm text-neutral-500 dark:text-neutral-400>
+                    <div i-lucide:play />
+                    VRM idle animation
+                  </span>
+                  <div truncate font-medium>
+                    {{ moduleSettings.idleVrmMotion || 'idle_loop' }}
                   </div>
                 </div>
               </div>

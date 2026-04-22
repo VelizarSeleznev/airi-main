@@ -5,7 +5,7 @@ import type { Profile } from '@proj-airi/model-driver-lipsync/shared/wlipsync'
 import type { SpeechProviderWithExtraOptions } from '@xsai-ext/providers/utils'
 import type { UnElevenLabsOptions } from 'unspeech'
 
-import type { EmotionPayload } from '../../constants/emotions'
+import type { EmotionPayload, MotionPayload } from '../../constants/emotions'
 
 import { drizzle } from '@proj-airi/drizzle-duckdb-wasm'
 import { getImportUrlBundles } from '@proj-airi/drizzle-duckdb-wasm/bundles/import-url-browser'
@@ -25,7 +25,7 @@ import { storeToRefs } from 'pinia'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 
 import { useLlmmarkerParser } from '../../composables/llm-marker-parser'
-import { useDelayMessageQueue, useEmotionsMessageQueue } from '../../composables/queues'
+import { useDelayMessageQueue, useEmotionsMessageQueue, useMotionsMessageQueue } from '../../composables/queues'
 import { useAuthProviderSync } from '../../composables/use-auth-provider-sync'
 import { useIOTraceBridge } from '../../composables/use-io-trace-bridge'
 import { initIOTracer } from '../../composables/use-io-tracer'
@@ -38,6 +38,7 @@ import { useSpeechStore } from '../../stores/modules/speech'
 import { useProvidersStore } from '../../stores/providers'
 import { useSettings } from '../../stores/settings'
 import { useSpeechRuntimeStore } from '../../stores/speech-runtime'
+import { useVrmMotionsStore } from '../../stores/vrm-motions'
 import { shouldRunLive2dLipSyncLoop } from './runtime'
 
 const props = withDefaults(defineProps<{
@@ -127,8 +128,11 @@ const speechStore = useSpeechStore()
 const { ssmlEnabled, activeSpeechProvider, activeSpeechModel, activeSpeechVoice, pitch } = storeToRefs(speechStore)
 const activeCardId = computed(() => activeCard.value?.name ?? 'default')
 const speechRuntimeStore = useSpeechRuntimeStore()
+const vrmMotionsStore = useVrmMotionsStore()
+const { vrmMotions } = storeToRefs(vrmMotionsStore)
 
 const { currentMotion } = storeToRefs(useLive2d())
+const currentIdleVrmMotionSrc = ref(animations.idleLoop.toString())
 
 const emotionsQueue = createQueue<EmotionPayload>({
   handlers: [
@@ -148,10 +152,26 @@ const emotionsQueue = createQueue<EmotionPayload>({
   ],
 })
 
+const motionsQueue = createQueue<MotionPayload>({
+  handlers: [
+    async (ctx) => {
+      if (stageModelRenderer.value !== 'vrm')
+        return
+
+      await playVrmMotionByQuery(ctx.data.name, { loop: ctx.data.loop, restoreIdleOnFinish: ctx.data.loop !== true })
+    },
+  ],
+})
+
 const emotionMessageContentQueue = useEmotionsMessageQueue(emotionsQueue)
+const motionMessageContentQueue = useMotionsMessageQueue(motionsQueue)
 emotionMessageContentQueue.onHandlerEvent('emotion', (emotion) => {
   // eslint-disable-next-line no-console
   console.debug('emotion detected', emotion)
+})
+motionMessageContentQueue.onHandlerEvent('motion', (motion) => {
+  // eslint-disable-next-line no-console
+  console.debug('motion detected', motion)
 })
 
 const delaysQueue = useDelayMessageQueue()
@@ -164,6 +184,7 @@ delaysQueue.onHandlerEvent('delay', (delay) => {
 function playSpecialToken(special: string) {
   delaysQueue.enqueue(special)
   emotionMessageContentQueue.enqueue(special)
+  motionMessageContentQueue.enqueue(special)
 }
 const lipSyncNode = ref<AudioNode>()
 
@@ -618,6 +639,28 @@ watch([stageModelRenderer, () => props.paused], ([renderer]) => {
   syncLipSyncLoop()
 }, { immediate: true })
 
+watch([activeCard, vrmMotions], async () => {
+  const configuredIdleMotionId = activeCard.value?.extensions?.airi?.modules?.vrmMotion?.idleMotionId
+  currentIdleVrmMotionSrc.value = await vrmMotionsStore.getVrmMotionUrl(configuredIdleMotionId) ?? animations.idleLoop.toString()
+}, { immediate: true, deep: true })
+
+async function playVrmMotionByQuery(
+  idOrName: string,
+  options: {
+    loop?: boolean
+    restoreIdleOnFinish?: boolean
+  } = {},
+) {
+  const motionUrl = await vrmMotionsStore.getVrmMotionUrl(idOrName)
+  if (!motionUrl)
+    return false
+
+  return vrmViewerRef.value?.playAnimation?.(motionUrl, {
+    loop: options.loop ?? false,
+    restoreIdleOnFinish: options.restoreIdleOnFinish ?? true,
+  }) ?? false
+}
+
 function canvasElement() {
   if (stageModelRenderer.value === 'live2d')
     return live2dSceneRef.value?.canvasElement()
@@ -642,6 +685,12 @@ onUnmounted(() => {
 defineExpose({
   canvasElement,
   readRenderTargetRegionAtClientPoint,
+  playMotionById: (id: string, options?: { loop?: boolean, restoreIdleOnFinish?: boolean }) => {
+    return playVrmMotionByQuery(id, options)
+  },
+  playMotionByName: (name: string, options?: { loop?: boolean, restoreIdleOnFinish?: boolean }) => {
+    return playVrmMotionByQuery(name, options)
+  },
 })
 </script>
 
@@ -679,7 +728,7 @@ defineExpose({
         v-model:state="componentState"
         min-w="50% <lg:full" min-h="100 sm:100" h-full w-full flex-1
         :model-src="stageModelSelectedUrl"
-        :idle-animation="animations.idleLoop.toString()"
+        :idle-animation="currentIdleVrmMotionSrc"
         :paused="paused"
         :show-axes="stageViewControlsEnabled"
         :current-audio-source="currentAudioSource"
