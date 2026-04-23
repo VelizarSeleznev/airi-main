@@ -74,6 +74,12 @@ const menu = computed(() => [
     to: '/devtools/plugin-host',
   },
   {
+    title: 'Pico Avatar Bridge',
+    description: 'Control PicoClaw bridge + launcher and inspect latest runtime traces',
+    icon: 'i-solar:ghost-bold-duotone',
+    to: '/devtools/pico-avatar',
+  },
+  {
     title: 'Updater',
     description: 'Inspect updater state, explicit feed overrides, and install actions',
     icon: 'i-solar:restart-bold-duotone',

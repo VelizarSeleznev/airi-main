@@ -251,6 +251,89 @@ export const electronWindowSetAlwaysOnTop = defineInvokeEventa<void, boolean>('e
 export const electronAppOpenUserDataFolder = defineInvokeEventa<{ path: string }>('eventa:invoke:electron:app:open-user-data-folder')
 export const electronAppQuit = defineInvokeEventa<void>('eventa:invoke:electron:app:quit')
 
+export interface ElectronPicoAvatarBridgeStatus {
+  ok: boolean
+  binary: string
+  configSource: string
+  runnerKind: 'host' | 'docker'
+  persistentContainer: boolean
+  traceDir: string
+  providerKind: 'lmstudio' | 'openrouter' | 'custom'
+  modelName: string
+  model: string
+  apiBase: string
+  apiReachable: boolean
+  fullAccess: boolean
+  workspace: string
+  workspaceRestricted: boolean
+}
+
+export interface ElectronPicoAvatarEndpointStatus {
+  reachable: boolean
+  status?: ElectronPicoAvatarBridgeStatus
+  error?: string
+}
+
+export interface ElectronPicoAvatarLauncherStatus {
+  running: boolean
+  exists: boolean
+  containerName: string
+  uiUrl: string
+  gatewayUrl: string
+  error?: string
+}
+
+export interface ElectronPicoAvatarTraceEvent {
+  at?: string
+  event: string
+  seq?: number
+  sseEvent?: string
+  source?: string
+  kind?: string
+  phase?: string
+  line?: string
+  text?: string
+  messagePreview?: string
+  retryBlockedReason?: string
+  classifiedAsRuntimeStatus?: boolean
+}
+
+export interface ElectronPicoAvatarTraceSnapshot {
+  traceId: string
+  path: string
+  updatedAt: number
+  eventCount: number
+  messagePreview?: string
+  finalText?: string
+  runtimeStatusText?: string
+  recentEvents: ElectronPicoAvatarTraceEvent[]
+  llmEvents: ElectronPicoAvatarTraceEvent[]
+  rawTail: string
+}
+
+export interface ElectronPicoAvatarInspection {
+  checkedAt: number
+  bridgeUiUrl: string
+  bridgeStatusUrl: string
+  launcherUiUrl: string
+  launcherGatewayUrl: string
+  traceDir: string
+  latestTracePath?: string
+  bridgeScriptPath: string
+  launcherScriptPath: string
+  bridge: ElectronPicoAvatarEndpointStatus
+  launcher: ElectronPicoAvatarLauncherStatus
+  latestTrace?: ElectronPicoAvatarTraceSnapshot
+}
+
+export const electronPicoAvatarInspect = defineInvokeEventa<ElectronPicoAvatarInspection>('eventa:invoke:electron:pico-avatar:inspect')
+export const electronPicoAvatarStartBridge = defineInvokeEventa<ElectronPicoAvatarInspection>('eventa:invoke:electron:pico-avatar:bridge:start')
+export const electronPicoAvatarStopBridge = defineInvokeEventa<ElectronPicoAvatarInspection>('eventa:invoke:electron:pico-avatar:bridge:stop')
+export const electronPicoAvatarStartLauncher = defineInvokeEventa<ElectronPicoAvatarInspection>('eventa:invoke:electron:pico-avatar:launcher:start')
+export const electronPicoAvatarStopLauncher = defineInvokeEventa<ElectronPicoAvatarInspection>('eventa:invoke:electron:pico-avatar:launcher:stop')
+export const electronPicoAvatarOpenTraceDir = defineInvokeEventa<{ path: string }>('eventa:invoke:electron:pico-avatar:trace-dir:open')
+export const electronPicoAvatarOpenLatestTrace = defineInvokeEventa<{ path: string }>('eventa:invoke:electron:pico-avatar:latest-trace:open')
+
 export type StageThreeRuntimeTraceEnvelope
   = | { type: 'three-render-info', payload: ThreeSceneRenderInfoTracePayload }
     | { type: 'three-hit-test-read', payload: ThreeHitTestReadTracePayload }
