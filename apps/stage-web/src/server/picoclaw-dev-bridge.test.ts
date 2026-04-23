@@ -53,8 +53,9 @@ describe('buildFastLayerSystemPrompt', () => {
     const result = buildFastLayerSystemPrompt('Stay in character.', ['idle_loop', 'VRMA_03'])
 
     expect(result).toContain('Available VRM motions in the current AIRI setup:')
-    expect(result).toContain('- idle_loop')
-    expect(result).toContain('- VRMA_03')
+    expect(result).toContain('- idle_loop (default idle loop)')
+    expect(result).toContain('- VRMA_03 (curious lean-in)')
     expect(result).toContain('Do not invent new motion names.')
+    expect(result).toContain('The exact ACT.motion value must stay the motion id itself')
   })
 })

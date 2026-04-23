@@ -273,13 +273,28 @@ function buildAvailableVrmMotionsPrompt(availableVrmMotions?: string[]) {
   if (normalized.length === 0)
     return ''
 
+  const builtInMotionLabels: Record<string, string> = {
+    idle_loop: 'default idle loop',
+    VRMA_01: 'friendly greeting',
+    VRMA_02: 'thinking shift',
+    VRMA_03: 'curious lean-in',
+    VRMA_04: 'cheerful emphasis',
+    VRMA_05: 'soft acknowledgment',
+    VRMA_06: 'surprised reaction',
+    VRMA_07: 'confident finish',
+  }
+
   return [
     'Available VRM motions in the current AIRI setup:',
-    ...normalized.map(motion => `- ${motion}`),
+    ...normalized.map((motion) => {
+      const label = builtInMotionLabels[motion]
+      return label ? `- ${motion} (${label})` : `- ${motion}`
+    }),
     'For ACT.motion:',
     '- Only use motion names from the list above.',
     '- Do not invent new motion names.',
     '- If none fit, omit the motion field.',
+    '- The exact ACT.motion value must stay the motion id itself, for example `VRMA_03`, not the human-readable label.',
   ].join('\n')
 }
 
