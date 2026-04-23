@@ -158,12 +158,15 @@ Concise but detailed reference for contributors working across the `moeru-ai/air
 ## PR / Workflow Tips
 
 - Rebase pulls; branch naming `username/feat/short-name`; clear commit messages (gitmoji optional).
+- Start by checking `git status --short --branch` so you understand whether the worktree is already dirty before making changes.
 - Summarize changes, how tested (commands), and follow-ups.
 - Improve legacy you touch; avoid one-off patterns.
 - Keep changes scoped; use workspace filters (`pnpm -F <workspace> <script>`).
 - Maintain structured `README.md` documentation for each `packages/` and `apps/` entry, covering what it does, how to use it, when to use it, and when not to use it.
 - Always run `pnpm typecheck` and `pnpm lint:fix` after finishing a task.
 - Use Conventional Commits for commit messages (e.g., `feat: add runner reconnect backoff`).
+- When you finish an implementation task, commit the changes you made and push the current branch unless the user explicitly asked you not to.
+- Keep the worktree in a clean, reviewable state: do not leave behind temporary files, half-finished generated artifacts, or unrelated edits. If the tree was already dirty before you started, do not revert others' work; isolate your own diff, commit only your changes, and leave the tree no worse than you found it.
 - For new feature requirements or requirement-related tasks involving `node:*` built-in modules, DOM operations, Vue composables, React hooks, Vite plugins, or GitHub Actions workflows, always do deep research for suitable existing libraries or open source modules first. Before choosing any library, always ask the user to choose and help judge which option is right. Never choose generalized utility libraries on your own (for example, `es-toolkit`, utilities from `github.com/unjs`, or tiny tools from `github.com/tinylib`) without explicit user confirmation. If the user is working spec-driven, list candidate choices in a clear and concise Markdown comparison table.
 - Before planning or writing new utilities/functions, always search for existing internal implementations first. If the logic could become shared utilities, proactively propose that shared approach to users and developers.
 
@@ -171,7 +174,7 @@ Concise but detailed reference for contributors working across the `moeru-ai/air
 
 These guidelines apply to all TypeScript code across the monorepo:
 
-- Do not create commits during implementation for this spec.
+- After validating a completed TypeScript task, create a focused commit for your changes and push the branch unless the user explicitly asked you not to.
 - For implemented modules, use Vitest whenever possible to verify behavior and passing tests.
 - During test implementation, every workaround must include a clear and easy-to-understand `// NOTICE:` comment for reference.
 - Use the following workaround comment format whenever a workaround is introduced:
