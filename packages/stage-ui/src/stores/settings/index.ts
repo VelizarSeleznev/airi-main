@@ -90,6 +90,7 @@ export const useSettings = defineStore('settings', () => {
     alwaysOnTop: controlsIslandRefs.alwaysOnTop,
     controlsIslandIconSize: controlsIslandRefs.controlsIslandIconSize,
     inspectUpdaterDiagnostics: developerRefs.inspectUpdaterDiagnostics,
+    picoAvatarBridgePanelEnabled: developerRefs.picoAvatarBridgePanelEnabled,
 
     // Methods
     setThemeColorsHue: theme.setThemeColorsHue,

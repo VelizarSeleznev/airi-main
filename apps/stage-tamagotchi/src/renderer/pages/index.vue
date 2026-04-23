@@ -32,6 +32,7 @@ import { refDebounced, useBroadcastChannel } from '@vueuse/core'
 import { storeToRefs } from 'pinia'
 import { computed, onMounted, onUnmounted, ref, toRef, watch } from 'vue'
 
+import PicoAvatarBridgePanel from '../components/pico-avatar/bridge-panel.vue'
 import ControlsIsland from '../components/stage-islands/controls-island/index.vue'
 import ResourceStatusIsland from '../components/stage-islands/resource-status-island/index.vue'
 import StatusIsland from '../components/stage-islands/status-island/index.vue'
@@ -81,7 +82,7 @@ const isTransparentByThree = useThreeSceneIsTransparentAtPoint(
 )
 
 const settingsStore = useSettings()
-const { stageModelRenderer, stageModelSelectedUrl } = storeToRefs(settingsStore)
+const { stageModelRenderer, stageModelSelectedUrl, picoAvatarBridgePanelEnabled } = storeToRefs(settingsStore)
 const modelStore = useModelStore()
 const { sceneMutationLocked, scenePhase } = storeToRefs(modelStore)
 const { stagePaused } = storeToRefs(useStageWindowLifecycleStore())
@@ -479,6 +480,7 @@ watch([stream, () => vadLoaded.value], async ([s, loaded]) => {
         <ControlsIsland
           ref="controlsIslandRef"
         />
+        <PicoAvatarBridgePanel v-if="picoAvatarBridgePanelEnabled" />
       </div>
     </div>
     <!-- Loading overlay sits on top, does not hide the stage -->

@@ -14,6 +14,7 @@ import { useModsServerChannelStore } from '@proj-airi/stage-ui/stores/mods/api/c
 import { useContextBridgeStore } from '@proj-airi/stage-ui/stores/mods/api/context-bridge'
 import { useAiriCardStore } from '@proj-airi/stage-ui/stores/modules/airi-card'
 import { usePerfTracerBridgeStore } from '@proj-airi/stage-ui/stores/perf-tracer-bridge'
+import { usePicoAvatarBridgeStore } from '@proj-airi/stage-ui/stores/pico-avatar-bridge'
 import { listProvidersForPluginHost, shouldPublishPluginHostCapabilities } from '@proj-airi/stage-ui/stores/plugin-host-capabilities'
 import { useSettings, useSettingsAudioDevice } from '@proj-airi/stage-ui/stores/settings'
 import { useVrmMotionsStore } from '@proj-airi/stage-ui/stores/vrm-motions'
@@ -30,6 +31,13 @@ import {
   electronGetServerChannelConfig,
   electronMcpCallTool,
   electronMcpListTools,
+  electronPicoAvatarInspect,
+  electronPicoAvatarOpenLatestTrace,
+  electronPicoAvatarOpenTraceDir,
+  electronPicoAvatarStartBridge,
+  electronPicoAvatarStartLauncher,
+  electronPicoAvatarStopBridge,
+  electronPicoAvatarStopLauncher,
   electronPluginInspect,
   electronPluginList,
   electronPluginLoad,
@@ -65,6 +73,7 @@ const characterOrchestratorStore = useCharacterOrchestratorStore()
 const analyticsStore = useSharedAnalyticsStore()
 const inferencePreload = useInferencePreload()
 const pluginHostInspectorStore = usePluginHostInspectorStore()
+const picoAvatarBridgeStore = usePicoAvatarBridgeStore()
 const stageWindowLifecycleStore = useStageWindowLifecycleStore()
 const settingsAudioDeviceStore = useSettingsAudioDevice()
 const context = useElectronEventaContext()
@@ -84,6 +93,13 @@ const reportPluginCapability = useElectronEventaInvoke(electronPluginUpdateCapab
 const listMcpTools = useElectronEventaInvoke(electronMcpListTools)
 const callMcpTool = useElectronEventaInvoke(electronMcpCallTool)
 const setLocale = useElectronEventaInvoke(i18nSetLocale)
+const inspectPicoAvatar = useElectronEventaInvoke(electronPicoAvatarInspect)
+const startPicoAvatarBridge = useElectronEventaInvoke(electronPicoAvatarStartBridge)
+const stopPicoAvatarBridge = useElectronEventaInvoke(electronPicoAvatarStopBridge)
+const startPicoAvatarLauncher = useElectronEventaInvoke(electronPicoAvatarStartLauncher)
+const stopPicoAvatarLauncher = useElectronEventaInvoke(electronPicoAvatarStopLauncher)
+const openPicoAvatarTraceDir = useElectronEventaInvoke(electronPicoAvatarOpenTraceDir)
+const openPicoAvatarLatestTrace = useElectronEventaInvoke(electronPicoAvatarOpenLatestTrace)
 const isChatWindowRoute = () => route.path === '/chat'
 
 // NOTICE: register plugin host bridge during setup to avoid race with pages using it in immediate watchers.
@@ -101,6 +117,16 @@ pluginHostInspectorStore.setBridge({
 setMcpToolBridge({
   listTools: () => listMcpTools(),
   callTool: payload => callMcpTool(payload),
+})
+
+picoAvatarBridgeStore.setBridge({
+  inspect: () => inspectPicoAvatar(),
+  startBridge: () => startPicoAvatarBridge(),
+  stopBridge: () => stopPicoAvatarBridge(),
+  startLauncher: () => startPicoAvatarLauncher(),
+  stopLauncher: () => stopPicoAvatarLauncher(),
+  openTraceDir: () => openPicoAvatarTraceDir(),
+  openLatestTrace: () => openPicoAvatarLatestTrace(),
 })
 
 watch(language, () => {

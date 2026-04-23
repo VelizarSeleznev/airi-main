@@ -158,6 +158,14 @@ const openDevtoolsWindow = useElectronEventaInvoke(electronOpenDevtoolsWindow)
     description="settings.animations.use-page-specific-transitions.description"
     transition="all ease-in-out duration-250"
   />
+  <CheckBar
+    v-model="settings.picoAvatarBridgePanelEnabled"
+    icon-on="i-solar:chat-round-line-bold-duotone"
+    icon-off="i-solar:ghost-bold-duotone"
+    text="Pico Avatar Bridge Panel"
+    description="Show the integrated bridge chat + debug panel inside the main AIRI stage."
+    transition="all ease-in-out duration-250"
+  />
   <div flex="~ col gap-4" mt-2 pb-12>
     <IconItem
       v-for="(item, index) in menu"

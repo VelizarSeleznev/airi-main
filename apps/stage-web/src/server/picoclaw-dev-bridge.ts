@@ -186,11 +186,17 @@ async function writeBridgeTrace(traceId: string, event: string, data: Record<str
 
 function writeJson(res: ServerResponse, statusCode: number, data: unknown) {
   res.statusCode = statusCode
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
   res.setHeader('Content-Type', 'application/json; charset=utf-8')
   res.end(JSON.stringify(data))
 }
 
 function writeSse(res: ServerResponse, event: string, data: unknown) {
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
   res.write(`event: ${event}\n`)
   res.write(`data: ${JSON.stringify(data)}\n\n`)
 }
@@ -1312,6 +1318,11 @@ export function PicoClawDevBridge(): Plugin {
     apply: 'serve',
     configureServer(server) {
       server.middlewares.use('/api/picoclaw/fast', async (req, res) => {
+        if (req.method === 'OPTIONS') {
+          writeJson(res, 204, {})
+          return
+        }
+
         if (req.method !== 'POST') {
           writeJson(res, 405, { error: 'POST required' })
           return
@@ -1370,6 +1381,11 @@ export function PicoClawDevBridge(): Plugin {
       })
 
       server.middlewares.use('/api/picoclaw/agent', async (req, res) => {
+        if (req.method === 'OPTIONS') {
+          writeJson(res, 204, {})
+          return
+        }
+
         if (req.method !== 'POST') {
           writeJson(res, 405, { error: 'POST required' })
           return
