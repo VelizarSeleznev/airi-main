@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { deriveVisibleStatus } from './picoclaw-dev-bridge'
+import { buildFastLayerSystemPrompt, deriveVisibleStatus } from './picoclaw-dev-bridge'
 
 describe('deriveVisibleStatus', () => {
   /**
@@ -41,5 +41,20 @@ describe('deriveVisibleStatus', () => {
     })
 
     expect(result).toBe('The current model is rate-limited, trying a fallback.')
+  })
+})
+
+describe('buildFastLayerSystemPrompt', () => {
+  /**
+   * @example
+   * buildFastLayerSystemPrompt('Stay in character.', ['idle_loop', 'VRMA_03'])
+   */
+  it('injects the available VRM motion allowlist into the prompt', () => {
+    const result = buildFastLayerSystemPrompt('Stay in character.', ['idle_loop', 'VRMA_03'])
+
+    expect(result).toContain('Available VRM motions in the current AIRI setup:')
+    expect(result).toContain('- idle_loop')
+    expect(result).toContain('- VRMA_03')
+    expect(result).toContain('Do not invent new motion names.')
   })
 })

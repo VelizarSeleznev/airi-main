@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { parseFastLayerOutput } from './pico-avatar.helpers'
+import { parseAvailableVrmMotionNames, parseFastLayerOutput } from './pico-avatar.helpers'
 
 describe('parseFastLayerOutput', () => {
   /**
@@ -45,5 +45,35 @@ describe('parseFastLayerOutput', () => {
 
     expect(result.mode).toBe('chat')
     expect(result.spokenText).toBe('[ag')
+  })
+})
+
+describe('parseAvailableVrmMotionNames', () => {
+  /**
+   * @example
+   * parseAvailableVrmMotionNames([
+   *   { id: 'preset-vrm-motion-idle-loop', name: 'idle_loop' },
+   *   { id: 'preset-vrm-motion-pack-03', name: 'VRMA_03' },
+   *   { id: 'custom-motion-1', name: 'Bow' },
+   * ], { preferred: ['idle_loop', 'VRMA_03'] })
+   */
+  it('deduplicates motion names and promotes preferred entries to the front', () => {
+    const result = parseAvailableVrmMotionNames([
+      { id: 'preset-vrm-motion-pack-03', name: 'VRMA_03' },
+      { id: 'preset-vrm-motion-idle-loop', name: 'idle_loop' },
+      { id: 'custom-motion-1', name: 'Bow' },
+      { id: 'custom-motion-2', name: 'bow' },
+      { id: 'fallback-only-id' },
+      'VRMA_03',
+    ], {
+      preferred: ['idle_loop', 'VRMA_03'],
+    })
+
+    expect(result).toEqual([
+      'idle_loop',
+      'VRMA_03',
+      'Bow',
+      'fallback-only-id',
+    ])
   })
 })

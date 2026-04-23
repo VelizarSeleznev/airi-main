@@ -74,6 +74,7 @@ interface PicoClawAgentRequest {
 interface FastLayerRequest {
   message?: string
   systemPrompt?: string
+  availableVrmMotions?: string[]
 }
 
 interface PicoClawConfig {
@@ -262,17 +263,39 @@ async function resolveLmStudioApiBase() {
   }
 }
 
-function buildFastLayerSystemPrompt(roleplayPrompt?: string) {
+function buildAvailableVrmMotionsPrompt(availableVrmMotions?: string[]) {
+  const normalized = Array.from(new Set(
+    (availableVrmMotions ?? [])
+      .map(item => item.trim())
+      .filter(Boolean),
+  ))
+
+  if (normalized.length === 0)
+    return ''
+
+  return [
+    'Available VRM motions in the current AIRI setup:',
+    ...normalized.map(motion => `- ${motion}`),
+    'For ACT.motion:',
+    '- Only use motion names from the list above.',
+    '- Do not invent new motion names.',
+    '- If none fit, omit the motion field.',
+  ].join('\n')
+}
+
+export function buildFastLayerSystemPrompt(roleplayPrompt?: string, availableVrmMotions?: string[]) {
   const personaPrompt = roleplayPrompt?.trim()
+  const availableVrmMotionsPrompt = buildAvailableVrmMotionsPrompt(availableVrmMotions)
 
   return [
     personaPrompt || 'You are the speaking front layer for AIRI.',
+    availableVrmMotionsPrompt,
     'Reply in the same language as the user when practical.',
     'Keep the reply short and immediately speakable.',
     'If the user is asking for tool usage, filesystem inspection, coding work, or a longer background task, start the first line with [agent].',
     'If no background task is needed, do not use [agent].',
     'Do not explain the marker. Do not output any other tags or structured data.',
-  ].join('\n\n')
+  ].filter(Boolean).join('\n\n')
 }
 
 async function streamFastLayer(
@@ -289,7 +312,7 @@ async function streamFastLayer(
 
   const apiBase = process.env.STAGE_WEB_FAST_API_BASE || (await resolveLmStudioApiBase()).apiBase
   const model = process.env.STAGE_WEB_FAST_MODEL || DEFAULT_FAST_MODEL_ID
-  const systemPrompt = buildFastLayerSystemPrompt(body.systemPrompt)
+  const systemPrompt = buildFastLayerSystemPrompt(body.systemPrompt, body.availableVrmMotions)
 
   const upstream = await fetch(`${apiBase.replace(/\/$/, '')}/chat/completions`, {
     method: 'POST',

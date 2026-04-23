@@ -28,7 +28,7 @@ import { breakpointsTailwind, useBreakpoints, useMouse } from '@vueuse/core'
 import { storeToRefs } from 'pinia'
 import { computed, onMounted, ref, useTemplateRef, watch } from 'vue'
 
-import { parseFastLayerOutput } from './pico-avatar.helpers'
+import { parseAvailableVrmMotionNames, parseFastLayerOutput } from './pico-avatar.helpers'
 
 const LM_STUDIO_PROVIDER_ID = 'lm-studio'
 const LM_STUDIO_MODEL = 'google/gemma-4-26b-a4b'
@@ -994,6 +994,9 @@ async function handleSend() {
       body: JSON.stringify({
         message: text,
         systemPrompt: systemPrompt.value || '',
+        availableVrmMotions: parseAvailableVrmMotionNames(vrmMotions.value, {
+          preferred: [activeCardIdleVrmMotionName.value, selectedVrmMotionName.value],
+        }),
       }),
     })
 
