@@ -6,23 +6,23 @@ services:
       dockerfile: docker/pico-avatar-allinone/Dockerfile
     container_name: airi-pico-avatar-allinone
     ports:
-      - "5174:5174"
-      - "18800:18800"
-      - "18790:18790"
-      - "3000-3010:3000-3010"
-      - "4173-4175:4173-4175"
-      - "8000-8010:8000-8010"
-      - "8080-8090:8080-8090"
+      - '5174:5174'
+      - '18800:18800'
+      - '18790:18790'
+      - '3000-3010:3000-3010'
+      - '4173-4175:4173-4175'
+      - '8000-8010:8000-8010'
+      - '8080-8090:8080-8090'
     environment:
       AIRI_DIR: /workspace/airi-main
-      AIRI_PORT: "5174"
+      AIRI_PORT: '5174'
       PICOCLAW_HOME: /root/.picoclaw
       PICOCLAW_GATEWAY_HOST: 0.0.0.0
-      PICOCLAW_LAUNCHER_PORT: "18800"
+      PICOCLAW_LAUNCHER_PORT: '18800'
       STAGE_WEB_PICOCLAW_RUNNER: host
       STAGE_WEB_PICOCLAW_BIN: /usr/local/bin/picoclaw
       STAGE_WEB_PICOCLAW_CONFIG: /root/.picoclaw/config.json
-      STAGE_WEB_PICOCLAW_FULL_ACCESS: "true"
+      STAGE_WEB_PICOCLAW_FULL_ACCESS: 'true'
       STAGE_WEB_PICOCLAW_TRACE_DIR: /root/.picoclaw/bridge-traces
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       PICOCLAW_LAUNCHER_TOKEN: ${PICOCLAW_LAUNCHER_TOKEN:-}

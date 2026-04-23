@@ -188,6 +188,13 @@ declare module 'vue-router/auto-routes' {
       Record<never, never>,
       | never
     >,
+    '/devtools/voice-scribe-inworld-demo': RouteRecordInfo<
+      '/devtools/voice-scribe-inworld-demo',
+      '/devtools/voice-scribe-inworld-demo',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
     '/devtools/websocket-inspector': RouteRecordInfo<
       '/devtools/websocket-inspector',
       '/devtools/websocket-inspector',
@@ -790,6 +797,12 @@ declare module 'vue-router/auto-routes' {
     '../../packages/stage-pages/src/pages/devtools/vibrant.vue': {
       routes:
         | '/devtools/vibrant'
+      views:
+        | never
+    }
+    'src/pages/devtools/voice-scribe-inworld-demo.vue': {
+      routes:
+        | '/devtools/voice-scribe-inworld-demo'
       views:
         | never
     }

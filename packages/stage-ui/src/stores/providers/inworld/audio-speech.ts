@@ -90,7 +90,7 @@ function createInworldFetch(apiKey: string, baseUrl: string) {
     const response = await globalThis.fetch(buildTtsUrl(baseUrl), {
       method: 'POST',
       headers: {
-        Authorization: `Basic ${normalizeApiKey(apiKey)}`,
+        'Authorization': `Basic ${normalizeApiKey(apiKey)}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({

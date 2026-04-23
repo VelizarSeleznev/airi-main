@@ -2,20 +2,20 @@
 // @see https://github.com/antfu/vscode-ext-gen
 
 // Meta info
-export const publisher = "proj-airi"
-export const name = "airi-vscode"
-export const version = "0.9.9000"
-export const displayName = "AIRI VSCode adapter"
-export const description = "Adapter that connects VSCode into Project AIRI"
+export const publisher = 'proj-airi'
+export const name = 'airi-vscode'
+export const version = '0.9.9000'
+export const displayName = 'AIRI VSCode adapter'
+export const description = 'Adapter that connects VSCode into Project AIRI'
 export const extensionId = `${publisher}.${name}`
 
 /**
  * Type union of all commands
  */
-export type CommandKey =
-  | "airi-vscode.enable"
-  | "airi-vscode.disable"
-  | "airi-vscode.status"
+export type CommandKey
+  = | 'airi-vscode.enable'
+    | 'airi-vscode.disable'
+    | 'airi-vscode.status'
 
 /**
  * Commands map registered by `proj-airi.airi-vscode`
@@ -25,50 +25,49 @@ export const commands = {
    * AIRI: Enable
    * @value `airi-vscode.enable`
    */
-  enable: "airi-vscode.enable",
+  enable: 'airi-vscode.enable',
   /**
    * AIRI: Disable
    * @value `airi-vscode.disable`
    */
-  disable: "airi-vscode.disable",
+  disable: 'airi-vscode.disable',
   /**
    * AIRI: Show Status
    * @value `airi-vscode.status`
    */
-  status: "airi-vscode.status",
+  status: 'airi-vscode.status',
 } satisfies Record<string, CommandKey>
 
 /**
  * Type union of all configs
  */
-export type ConfigKey =
-  | "airi-vscode.enabled"
-  | "airi-vscode.contextLines"
-  | "airi-vscode.sendInterval"
+export type ConfigKey
+  = | 'airi-vscode.enabled'
+    | 'airi-vscode.contextLines'
+    | 'airi-vscode.sendInterval'
 
 export interface ConfigKeyTypeMap {
-  "airi-vscode.enabled": boolean,
-  "airi-vscode.contextLines": number,
-  "airi-vscode.sendInterval": number,
+  'airi-vscode.enabled': boolean
+  'airi-vscode.contextLines': number
+  'airi-vscode.sendInterval': number
 }
 
 export interface ConfigShorthandMap {
-  enabled: "airi-vscode.enabled",
-  contextLines: "airi-vscode.contextLines",
-  sendInterval: "airi-vscode.sendInterval",
+  enabled: 'airi-vscode.enabled'
+  contextLines: 'airi-vscode.contextLines'
+  sendInterval: 'airi-vscode.sendInterval'
 }
 
 export interface ConfigShorthandTypeMap {
-  enabled: boolean,
-  contextLines: number,
-  sendInterval: number,
+  enabled: boolean
+  contextLines: number
+  sendInterval: number
 }
 
 export interface ConfigItem<T extends keyof ConfigKeyTypeMap> {
-  key: T,
-  default: ConfigKeyTypeMap[T],
+  key: T
+  default: ConfigKeyTypeMap[T]
 }
-
 
 /**
  * Configs map registered by `proj-airi.airi-vscode`
@@ -81,9 +80,9 @@ export const configs = {
    * @type `boolean`
    */
   enabled: {
-    key: "airi-vscode.enabled",
+    key: 'airi-vscode.enabled',
     default: true,
-  } as ConfigItem<"airi-vscode.enabled">,
+  } as ConfigItem<'airi-vscode.enabled'>,
   /**
    * Number of context lines to send (before and after current line)
    * @key `airi-vscode.contextLines`
@@ -91,9 +90,9 @@ export const configs = {
    * @type `number`
    */
   contextLines: {
-    key: "airi-vscode.contextLines",
+    key: 'airi-vscode.contextLines',
     default: 5,
-  } as ConfigItem<"airi-vscode.contextLines">,
+  } as ConfigItem<'airi-vscode.contextLines'>,
   /**
    * Interval in milliseconds to send updates (0 for real-time)
    * @key `airi-vscode.sendInterval`
@@ -101,37 +100,36 @@ export const configs = {
    * @type `number`
    */
   sendInterval: {
-    key: "airi-vscode.sendInterval",
+    key: 'airi-vscode.sendInterval',
     default: 3000,
-  } as ConfigItem<"airi-vscode.sendInterval">,
+  } as ConfigItem<'airi-vscode.sendInterval'>,
 }
 
 export interface ScopedConfigKeyTypeMap {
-  "enabled": boolean,
-  "contextLines": number,
-  "sendInterval": number,
+  enabled: boolean
+  contextLines: number
+  sendInterval: number
 }
 
 export const scopedConfigs = {
-  scope: "airi-vscode",
+  scope: 'airi-vscode',
   defaults: {
-    "enabled": true,
-    "contextLines": 5,
-    "sendInterval": 3000,
+    enabled: true,
+    contextLines: 5,
+    sendInterval: 3000,
   } satisfies ScopedConfigKeyTypeMap,
 }
 
 export interface NestedConfigs {
-  "airi-vscode": {
-    "enabled": boolean,
-    "contextLines": number,
-    "sendInterval": number,
-  },
+  'airi-vscode': {
+    enabled: boolean
+    contextLines: number
+    sendInterval: number
+  }
 }
 
 export interface NestedScopedConfigs {
-  "enabled": boolean,
-  "contextLines": number,
-  "sendInterval": number,
+  enabled: boolean
+  contextLines: number
+  sendInterval: number
 }
-
