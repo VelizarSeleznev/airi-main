@@ -1,11 +1,15 @@
 <script setup lang="ts">
+import { useElectronEventaInvoke } from '@proj-airi/electron-vueuse'
 import { usePicoAvatarBridgeStore } from '@proj-airi/stage-ui/stores/pico-avatar-bridge'
 import { Button, FieldCheckbox, Input } from '@proj-airi/ui'
 import { storeToRefs } from 'pinia'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 
+import { electronOpenDevtoolsWindow } from '../../../shared/eventa'
+
 const AUTO_REFRESH_OWNER = 'tamagotchi-devtools-pico-avatar'
 const bridgeStore = usePicoAvatarBridgeStore()
+const openDevtoolsWindow = useElectronEventaInvoke(electronOpenDevtoolsWindow)
 
 const filter = ref('')
 const autoRefresh = ref(true)
@@ -177,6 +181,9 @@ onUnmounted(() => {
         </div>
 
         <div :class="['mt-4', 'flex', 'flex-wrap', 'gap-2']">
+          <Button @click="() => openDevtoolsWindow({ key: 'pico-avatar-chat', route: '/devtools/pico-avatar-chat', width: 1100, height: 900 })">
+            Open Chat Window
+          </Button>
           <Button @click="void bridgeStore.startBridge()">
             Start Bridge
           </Button>

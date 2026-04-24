@@ -117,6 +117,9 @@ export interface PicoAvatarBridgeStatus {
   configSource: string
   runnerKind: 'host' | 'docker'
   persistentContainer: boolean
+  containerName?: string
+  containerRunning?: boolean
+  dockerImage?: string
   traceDir: string
   providerKind: 'lmstudio' | 'openrouter' | 'custom'
   modelName: string
@@ -267,7 +270,10 @@ export const usePicoAvatarBridgeStore = defineStore('pico-avatar-bridge', () => 
   const bridgeStatus = computed(() => inspection.value?.bridge.status)
   const latestTrace = computed(() => inspection.value?.latestTrace)
   const bridgeOnline = computed(() => inspection.value?.bridge.reachable === true && bridgeStatus.value?.ok === true)
-  const launcherRunning = computed(() => inspection.value?.launcher.running === true)
+  const launcherRunning = computed(() => {
+    return inspection.value?.launcher.running === true
+      || bridgeStatus.value?.containerRunning === true
+  })
   const bridgeError = computed(() => error.value || inspection.value?.bridge.error || inspection.value?.launcher.error)
   const speechConfigured = computed(() => {
     return activeSpeechProvider.value !== 'speech-noop'

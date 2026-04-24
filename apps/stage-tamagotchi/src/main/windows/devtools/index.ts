@@ -1,11 +1,18 @@
+import type { I18n } from '../../libs/i18n'
+import type { ServerChannel } from '../../services/airi/channel-server'
+
 import { join, resolve } from 'node:path'
 
-import { BrowserWindow, shell } from 'electron'
+import { defineInvokeHandler } from '@moeru/eventa'
+import { createContext } from '@moeru/eventa/adapters/electron/main'
+import { BrowserWindow, ipcMain, shell } from 'electron'
 
 import icon from '../../../../resources/icon.png?asset'
 
+import { electronOpenDevtoolsWindow } from '../../../shared/eventa'
 import { baseUrl, getElectronMainDirname, load, withHashRoute } from '../../libs/electron/location'
 import { createReusableWindow } from '../../libs/electron/window-manager'
+import { setupBaseWindowElectronInvokes } from '../shared/window'
 
 export interface OpenDevtoolsWindowParams extends Partial<Electron.Rectangle> {
   key: string
@@ -16,7 +23,10 @@ export interface DevtoolsWindowManager {
   openWindow: (params: OpenDevtoolsWindowParams) => Promise<BrowserWindow>
 }
 
-export function setupDevtoolsWindow(): DevtoolsWindowManager {
+export function setupDevtoolsWindow(params: {
+  i18n: I18n
+  serverChannel: ServerChannel
+}): DevtoolsWindowManager {
   const rendererBase = baseUrl(resolve(getElectronMainDirname(), '..', 'renderer'))
   const defaultRoute = '/devtools'
   const reusableWindows = new Map<string, ReturnType<typeof createReusableWindow>>()
@@ -53,6 +63,19 @@ export function setupDevtoolsWindow(): DevtoolsWindowManager {
       })
 
       await load(window, withHashRoute(rendererBase, route))
+      // Devtools pages share renderer code with settings/main windows and need
+      // the same app-level invokes for Pico Avatar inspect/start/stop actions.
+      ipcMain.setMaxListeners(0)
+      const { context } = createContext(ipcMain, window)
+      await setupBaseWindowElectronInvokes({
+        context,
+        window,
+        i18n: params.i18n,
+        serverChannel: params.serverChannel,
+      })
+      defineInvokeHandler(context, electronOpenDevtoolsWindow, async (payload) => {
+        await openWindow(payload)
+      })
       return window
     })
 

@@ -20,6 +20,7 @@ import {
   electron,
   electronAppQuit,
   electronOpenChat,
+  electronOpenDevtoolsWindow,
   electronOpenSettings,
   electronStartDraggingWindow,
   electronWindowSetAlwaysOnTop,
@@ -35,6 +36,7 @@ const { enabled } = storeToRefs(settingsAudioDeviceStore)
 const { alwaysOnTop, controlsIslandIconSize } = storeToRefs(settingsStore)
 const openSettings = useElectronEventaInvoke(electronOpenSettings)
 const openChat = useElectronEventaInvoke(electronOpenChat)
+const openDevtoolsWindow = useElectronEventaInvoke(electronOpenDevtoolsWindow)
 const isLinux = useElectronEventaInvoke(electron.app.isLinux)
 const closeWindow = useElectronEventaInvoke(electronAppQuit)
 const setAlwaysOnTop = useElectronEventaInvoke(electronWindowSetAlwaysOnTop)
@@ -170,6 +172,15 @@ function refreshWindow() {
               </ControlButton>
               <template #tooltip>
                 {{ t('tamagotchi.stage.controls-island.open-chat') }}
+              </template>
+            </ControlButtonTooltip>
+
+            <ControlButtonTooltip disable-hoverable-content>
+              <ControlButton :button-style="adjustStyleClasses.button" @click="() => openDevtoolsWindow({ key: 'pico-avatar-chat', route: '/devtools/pico-avatar-chat', width: 1100, height: 900 })">
+                <div i-solar:ghost-bold-duotone :class="adjustStyleClasses.icon" text="neutral-800 dark:neutral-300" />
+              </ControlButton>
+              <template #tooltip>
+                Open PicoClaw chat
               </template>
             </ControlButtonTooltip>
 

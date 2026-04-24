@@ -141,6 +141,24 @@ const openDevtoolsWindow = useElectronEventaInvoke(electronOpenDevtoolsWindow)
   >
     {{ t('tamagotchi.settings.devtools.pages.lag-visualizer.title') }}
   </ButtonBar>
+  <ButtonBar
+    mb-2
+    icon="i-solar:chat-round-line-bold-duotone"
+    text="Open PicoClaw Chat"
+    transition="all ease-in-out duration-250"
+    @click="() => openDevtoolsWindow({ key: 'pico-avatar-chat', route: '/devtools/pico-avatar-chat', width: 1100, height: 900 })"
+  >
+    Open dedicated PicoClaw chat window
+  </ButtonBar>
+  <ButtonBar
+    mb-2
+    icon="i-solar:ghost-bold-duotone"
+    text="Open PicoClaw Debug"
+    transition="all ease-in-out duration-250"
+    @click="() => openDevtoolsWindow({ key: 'pico-avatar', route: '/devtools/pico-avatar', width: 1200, height: 900 })"
+  >
+    Open dedicated PicoClaw debug window
+  </ButtonBar>
   <CheckBar
     v-model="settings.disableTransitions"
     mb-2

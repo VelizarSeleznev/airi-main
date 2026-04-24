@@ -139,7 +139,10 @@ app.whenReady().then(async () => {
   // BeatSync will create a background window to capture and process audio.
   const beatSync = injeca.provide('windows:beat-sync', () => setupBeatSync())
 
-  const devtoolsWindow = injeca.provide('windows:devtools', () => setupDevtoolsWindow())
+  const devtoolsWindow = injeca.provide('windows:devtools', {
+    dependsOn: { i18n, serverChannel },
+    build: ({ dependsOn }) => setupDevtoolsWindow(dependsOn),
+  })
 
   const onboardingWindowManager = injeca.provide('windows:onboarding', {
     dependsOn: { serverChannel, i18n, windowAuthManager },

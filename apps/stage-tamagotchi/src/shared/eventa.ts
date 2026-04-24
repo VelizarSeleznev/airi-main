@@ -257,6 +257,9 @@ export interface ElectronPicoAvatarBridgeStatus {
   configSource: string
   runnerKind: 'host' | 'docker'
   persistentContainer: boolean
+  containerName?: string
+  containerRunning?: boolean
+  dockerImage?: string
   traceDir: string
   providerKind: 'lmstudio' | 'openrouter' | 'custom'
   modelName: string

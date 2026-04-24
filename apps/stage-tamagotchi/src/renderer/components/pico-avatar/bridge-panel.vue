@@ -12,10 +12,14 @@ import { usePicoAvatarBridgeStore } from '@proj-airi/stage-ui/stores/pico-avatar
 import { Button, useDeferredMount } from '@proj-airi/ui'
 import { storeToRefs } from 'pinia'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { RouterLink } from 'vue-router'
 
 import { electronOpenDevtoolsWindow } from '../../../shared/eventa'
 
+const props = withDefaults(defineProps<{
+  mode?: 'overlay' | 'window'
+}>(), {
+  mode: 'overlay',
+})
 const AUTO_REFRESH_OWNER = 'tamagotchi-main-stage'
 const { isReady } = useDeferredMount()
 const bridgeStore = usePicoAvatarBridgeStore()
@@ -45,8 +49,6 @@ const {
 
 const composerText = ref('')
 const historyMessages = computed(() => messages.value as unknown as ChatHistoryItem[])
-const activeChatProviderRoute = computed(() => activeProvider.value ? `/settings/providers/chat/${activeProvider.value}` : '/settings/models')
-const activeSpeechProviderRoute = computed(() => activeSpeechProvider.value ? `/settings/providers/speech/${activeSpeechProvider.value}` : '/settings/modules/speech')
 const recentTraceEvents = computed(() => latestTrace.value?.recentEvents.slice().reverse().slice(0, 8) ?? [])
 
 function formatDateTime(value?: number) {
@@ -95,8 +97,9 @@ onUnmounted(() => {
 <template>
   <aside
     :class="[
-      'absolute right-4 top-4 z-20',
-      'h-[calc(100%-2rem)] w-[25rem] max-w-[calc(100vw-2rem)]',
+      props.mode === 'overlay'
+        ? 'absolute right-4 top-4 z-20 h-[calc(100%-2rem)] w-[25rem] max-w-[calc(100vw-2rem)]'
+        : 'relative z-0 h-full w-full max-w-none',
       'flex flex-col gap-3',
       'rounded-3xl border border-neutral-200/70 bg-white/92 p-3 shadow-2xl backdrop-blur-xl',
       'dark:border-neutral-700/70 dark:bg-neutral-950/88',
@@ -157,16 +160,16 @@ onUnmounted(() => {
 
     <div :class="['grid gap-2 rounded-2xl border border-neutral-200/70 bg-neutral-50/80 p-3 text-xs dark:border-neutral-800 dark:bg-neutral-900/60']">
       <div :class="['grid grid-cols-2 gap-2']">
-        <RouterLink :to="activeChatProviderRoute" :class="['rounded-xl bg-white/80 px-3 py-2 transition hover:bg-white dark:bg-neutral-950/80 dark:hover:bg-neutral-950']">
+        <div :class="['rounded-xl bg-white/80 px-3 py-2 dark:bg-neutral-950/80']">
           <div :class="['text-neutral-500 dark:text-neutral-400']">
             AIRI chat model
           </div>
           <div :class="['mt-1 font-medium break-all']">
             {{ activeProvider || 'not selected' }} / {{ activeModel || '—' }}
           </div>
-        </RouterLink>
+        </div>
 
-        <RouterLink :to="activeSpeechProviderRoute" :class="['rounded-xl bg-white/80 px-3 py-2 transition hover:bg-white dark:bg-neutral-950/80 dark:hover:bg-neutral-950']">
+        <div :class="['rounded-xl bg-white/80 px-3 py-2 dark:bg-neutral-950/80']">
           <div :class="['text-neutral-500 dark:text-neutral-400']">
             AIRI voice
           </div>
@@ -176,7 +179,7 @@ onUnmounted(() => {
           <div :class="['mt-1 text-neutral-500 dark:text-neutral-400']">
             Voice: {{ activeSpeechVoiceId || '—' }}
           </div>
-        </RouterLink>
+        </div>
       </div>
 
       <div :class="['rounded-xl bg-white/80 px-3 py-2 dark:bg-neutral-950/80']">
