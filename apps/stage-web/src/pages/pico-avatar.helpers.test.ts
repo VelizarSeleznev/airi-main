@@ -27,6 +27,17 @@ describe('parseFastLayerOutput', () => {
 
   /**
    * @example
+   * parseFastLayerOutput('\n  [agent] I will inspect that.')
+   */
+  it('detects the agent marker after leading whitespace and newlines', () => {
+    const result = parseFastLayerOutput('\n  [agent] I will inspect that.')
+
+    expect(result.mode).toBe('agent')
+    expect(result.spokenText).toBe('I will inspect that.')
+  })
+
+  /**
+   * @example
    * parseFastLayerOutput('Hi there!')
    */
   it('treats plain output as chat text', () => {
@@ -45,6 +56,17 @@ describe('parseFastLayerOutput', () => {
 
     expect(result.mode).toBe('chat')
     expect(result.spokenText).toBe('[ag')
+  })
+
+  /**
+   * @example
+   * parseFastLayerOutput('Please wait while I think.', { done: true })
+   */
+  it('keeps completed non-marker output as normal chat', () => {
+    const result = parseFastLayerOutput('Please wait while I think.', { done: true })
+
+    expect(result.mode).toBe('chat')
+    expect(result.spokenText).toBe('Please wait while I think.')
   })
 })
 

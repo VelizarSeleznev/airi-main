@@ -26,7 +26,7 @@ import { getDefaultKokoroModel } from '@proj-airi/stage-ui/workers/kokoro/consta
 import { BasicTextarea } from '@proj-airi/ui'
 import { breakpointsTailwind, useBreakpoints, useMouse } from '@vueuse/core'
 import { storeToRefs } from 'pinia'
-import { computed, onMounted, ref, useTemplateRef, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, useTemplateRef, watch } from 'vue'
 
 import { parseAvailableVrmMotionNames, parseFastLayerOutput } from './pico-avatar.helpers'
 
@@ -137,6 +137,15 @@ const llmTraceStartedAt = ref<number | null>(null)
 const llmTraceFirstTokenAt = ref<number | null>(null)
 const llmTraceElapsedMs = ref(0)
 const llmTraceFinalChars = ref(0)
+const commandPaletteOpen = ref(false)
+const activeQuickPanel = ref<'tts' | 'llm' | 'debug' | null>(null)
+const debugPanelOpen = ref(false)
+const lastFastLayerUserPrompt = ref('')
+const lastFastLayerAiriPrompt = ref('')
+const lastFastLayerVrmMotions = ref<string[]>([])
+const agentHandoffActive = ref(false)
+const picoclawTraceId = ref('')
+const picoclawRuntimePhase = ref('')
 
 let recognition: any
 let llmTraceTimer: ReturnType<typeof setInterval> | undefined
@@ -172,6 +181,8 @@ const logsText = computed(() => runtimeLogs.value.map(log => `[${log.at}] ${log.
 const streamingContent = computed(() => streamingMessage.value.content || '')
 const streamingPreview = computed(() => (streamingContent.value || fastReplyText.value).slice(-500))
 const systemPromptPreview = computed(() => (systemPrompt.value || 'No active AIRI card system prompt.').slice(0, 600))
+const fastLayerAiriPromptPreview = computed(() => (lastFastLayerAiriPrompt.value || 'No AIRI prompt has been sent to the fast layer yet.').slice(0, 900))
+const fastLayerVrmMotionPreview = computed(() => lastFastLayerVrmMotions.value.join(', ') || 'No VRM motion allowlist has been sent yet.')
 const picoclawRuntimeSummary = computed(() => {
   const status = picoclawBridgeStatus.value
   if (!status?.ok)
@@ -202,6 +213,12 @@ const selectedVoiceName = computed(() => {
     || activeSpeechVoiceId.value
     || 'none'
 })
+const visibleAgentStatus = computed(() => {
+  if (agentHandoffActive.value)
+    return picoclawRuntimePhase.value ? `Agent handoff: ${picoclawRuntimePhase.value}` : 'Agent handoff started'
+
+  return fastReplyMode.value === 'agent' ? 'Agent handoff requested' : ''
+})
 
 const speechProviderOptions = [
   { id: KOKORO_PROVIDER_ID, label: 'Kokoro local' },
@@ -224,6 +241,61 @@ function appendLog(level: 'info' | 'warn' | 'error', message: string) {
   runtimeLogs.value = [{ at, level, message }, ...runtimeLogs.value].slice(0, 80)
   const method = level === 'error' ? console.error : level === 'warn' ? console.warn : console.info
   method(`[PicoAvatar] ${message}`)
+}
+
+function openQuickPanel(panel: 'tts' | 'llm' | 'debug') {
+  activeQuickPanel.value = activeQuickPanel.value === panel ? null : panel
+  commandPaletteOpen.value = false
+
+  if (panel === 'debug')
+    debugPanelOpen.value = true
+}
+
+function closeCommandPalette() {
+  commandPaletteOpen.value = false
+}
+
+function handleGlobalKeydown(event: KeyboardEvent) {
+  const target = event.target as HTMLElement | null
+  const editingText = target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA' || target?.isContentEditable
+
+  if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+    event.preventDefault()
+    commandPaletteOpen.value = !commandPaletteOpen.value
+    return
+  }
+
+  if (event.key === 'Escape') {
+    if (commandPaletteOpen.value) {
+      event.preventDefault()
+      closeCommandPalette()
+      return
+    }
+
+    if (!editingText && activeQuickPanel.value) {
+      event.preventDefault()
+      activeQuickPanel.value = null
+    }
+  }
+}
+
+function looksLikeAgentRequest(text: string) {
+  const normalized = text.toLowerCase()
+  return [
+    'agent',
+    'tool',
+    'file',
+    'inspect',
+    'debug',
+    'fix',
+    'implement',
+    'код',
+    'файл',
+    'дебаг',
+    'почини',
+    'исправ',
+    'сделай',
+  ].some(token => normalized.includes(token))
 }
 
 function createLocalMessageId() {
@@ -780,6 +852,9 @@ function appendRuntimeEventLog(event: string, data: Record<string, unknown>) {
   const line = typeof data.line === 'string' ? data.line : typeof data.message === 'string' ? data.message : JSON.stringify(data)
   const phase = typeof data.phase === 'string' ? `${data.phase}: ` : ''
   const level = event === 'error' ? 'error' : event === 'runtime' || event === 'visible_status' ? 'info' : 'warn'
+  if (event === 'runtime' && typeof data.phase === 'string')
+    picoclawRuntimePhase.value = data.phase
+
   appendLog(level, `${phase}${line}`)
 }
 
@@ -898,6 +973,7 @@ async function readPicoClawStream(response: Response) {
       const data = item.data ? JSON.parse(item.data) as Record<string, unknown> : {}
       if (!traceId && typeof data.traceId === 'string') {
         traceId = data.traceId
+        picoclawTraceId.value = traceId
         appendLog('info', `PicoClaw trace id: ${traceId}`)
       }
 
@@ -919,6 +995,7 @@ async function readPicoClawStream(response: Response) {
       if (item.event === 'visible_status') {
         visibleStatus = typeof data.text === 'string' ? data.text : ''
         if (visibleStatus) {
+          picoclawRuntimePhase.value = visibleStatus
           appendLog('info', `PicoClaw visible status: ${visibleStatus}`)
           queueVisibleStatus(visibleStatus)
           void drainVisibleStatusQueue()
@@ -958,6 +1035,9 @@ async function handleSend() {
   visibleStatusText.value = ''
   visibleStatusQueue.value = []
   lastVisibleStatusSpoken.value = ''
+  agentHandoffActive.value = false
+  picoclawTraceId.value = ''
+  picoclawRuntimePhase.value = ''
 
   try {
     startLlmTrace(text)
@@ -986,6 +1066,13 @@ async function handleSend() {
     await chatOrchestrator.emitBeforeMessageComposedHooks(text, context)
     chatSession.appendSessionMessage(sessionId, userMessage)
     await chatOrchestrator.emitBeforeSendHooks(text, context)
+    const availableVrmMotions = parseAvailableVrmMotionNames(vrmMotions.value, {
+      preferred: [activeCardIdleVrmMotionName.value, selectedVrmMotionName.value],
+    })
+    lastFastLayerUserPrompt.value = text
+    lastFastLayerAiriPrompt.value = systemPrompt.value || ''
+    lastFastLayerVrmMotions.value = availableVrmMotions
+
     const fastLayerResponse = await fetch('/api/picoclaw/fast', {
       method: 'POST',
       headers: {
@@ -994,9 +1081,7 @@ async function handleSend() {
       body: JSON.stringify({
         message: text,
         systemPrompt: systemPrompt.value || '',
-        availableVrmMotions: parseAvailableVrmMotionNames(vrmMotions.value, {
-          preferred: [activeCardIdleVrmMotionName.value, selectedVrmMotionName.value],
-        }),
+        availableVrmMotions,
       }),
     })
 
@@ -1006,6 +1091,9 @@ async function handleSend() {
     const fastLayerResult = await readFastLayerStream(fastLayerResponse)
 
     if (fastLayerResult.mode !== 'agent') {
+      if (looksLikeAgentRequest(text))
+        appendLog('warn', 'Fast layer did not request PicoClaw agent mode for a prompt that looks like tool or coding work.')
+
       const finalText = fastLayerResult.spokenText.trim()
       if (!finalText)
         throw new Error('Fast layer completed without a spoken response.')
@@ -1027,6 +1115,10 @@ async function handleSend() {
       return
     }
 
+    fastReplyMode.value = 'agent'
+    agentHandoffActive.value = true
+    visibleStatusText.value = 'Starting PicoClaw agent work.'
+    picoclawRuntimePhase.value = 'starting'
     appendLog('info', 'Fast layer requested PicoClaw background work.')
     chatStream.beginStream()
     const response = await fetch('/api/picoclaw/agent', {
@@ -1070,12 +1162,15 @@ async function handleSend() {
     }, context)
     chatStream.resetStream()
     finishLlmTrace('done')
+    agentHandoffActive.value = false
+    picoclawRuntimePhase.value = 'done'
     appendLog('info', `PicoClaw response completed: ${llmTraceLabel.value}`)
     fastReplyText.value = ''
   }
   catch (error) {
     finishLlmTrace('error')
     chatStream.resetStream()
+    agentHandoffActive.value = false
     messageInput.value = text
     chatError.value = error instanceof Error ? error.message : String(error)
     appendLog('error', `PicoClaw send failed: ${chatError.value}`)
@@ -1095,6 +1190,7 @@ function handleComposerKeydown(event: KeyboardEvent) {
 
 onMounted(async () => {
   syncBackgroundTheme()
+  window.addEventListener('keydown', handleGlobalKeydown)
   const inworldConfig = providers.value[INWORLD_PROVIDER_ID] || {}
   inworldApiKey.value = (inworldConfig.apiKey as string | undefined) || ''
   inworldBaseUrl.value = (inworldConfig.baseUrl as string | undefined) || INWORLD_DEFAULT_BASE_URL
@@ -1103,6 +1199,12 @@ onMounted(async () => {
   selectedVoiceId.value = activeSpeechVoiceId.value
   inworldSpeed.value = Number((inworldConfig.speed as number | undefined) || (inworldConfig.voiceSettings as { speed?: number } | undefined)?.speed || 1)
   await bootstrapPrototype()
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleGlobalKeydown)
+  if (llmTraceTimer)
+    clearInterval(llmTraceTimer)
 })
 
 watch(selectedVoiceId, (voiceId) => {
@@ -1203,11 +1305,11 @@ watch(vrmMotions, (motions) => {
 
       <aside
         :class="[
-          'flex shrink-0 flex-col overflow-y-auto rounded-4xl border border-white/15 bg-white/75 p-4 text-neutral-900 shadow-2xl backdrop-blur-xl dark:bg-neutral-950/80 dark:text-neutral-100',
+          'flex shrink-0 flex-col overflow-hidden rounded-4xl border border-white/15 bg-white/75 p-4 text-neutral-900 shadow-2xl backdrop-blur-xl dark:bg-neutral-950/80 dark:text-neutral-100',
           isMobile ? 'min-h-[42dvh]' : 'h-[calc(100dvh-3rem)] w-[26rem] max-w-[32rem]',
         ]"
       >
-        <div class="flex items-start justify-between gap-4">
+        <div class="flex shrink-0 items-start justify-between gap-4">
           <div class="space-y-1">
             <p class="text-xs text-neutral-500 tracking-[0.25em] uppercase dark:text-neutral-400">
               AIRI x PicoClaw
@@ -1238,7 +1340,100 @@ watch(vrmMotions, (motions) => {
           </div>
         </div>
 
-        <div class="mt-4 text-xs space-y-2">
+        <div class="mt-3 flex shrink-0 flex-wrap items-center gap-2">
+          <button
+            type="button"
+            class="border border-neutral-300/70 rounded-full px-3 py-1.5 text-xs text-neutral-700 transition dark:border-neutral-700 hover:bg-neutral-200/70 dark:text-neutral-200 dark:hover:bg-neutral-800"
+            :class="activeQuickPanel === 'tts' ? 'bg-neutral-950 text-white dark:bg-white dark:text-neutral-950' : ''"
+            @click="openQuickPanel('tts')"
+          >
+            TTS
+          </button>
+          <button
+            type="button"
+            class="border border-neutral-300/70 rounded-full px-3 py-1.5 text-xs text-neutral-700 transition dark:border-neutral-700 hover:bg-neutral-200/70 dark:text-neutral-200 dark:hover:bg-neutral-800"
+            :class="activeQuickPanel === 'llm' ? 'bg-neutral-950 text-white dark:bg-white dark:text-neutral-950' : ''"
+            @click="openQuickPanel('llm')"
+          >
+            LLM
+          </button>
+          <button
+            type="button"
+            class="border border-neutral-300/70 rounded-full px-3 py-1.5 text-xs text-neutral-700 transition dark:border-neutral-700 hover:bg-neutral-200/70 dark:text-neutral-200 dark:hover:bg-neutral-800"
+            :class="activeQuickPanel === 'debug' ? 'bg-neutral-950 text-white dark:bg-white dark:text-neutral-950' : ''"
+            @click="openQuickPanel('debug')"
+          >
+            Debug
+          </button>
+          <button
+            type="button"
+            class="border border-neutral-300/70 rounded-full px-3 py-1.5 text-xs text-neutral-500 transition dark:border-neutral-700 hover:bg-neutral-200/70 dark:text-neutral-300 dark:hover:bg-neutral-800"
+            @click="commandPaletteOpen = true"
+          >
+            Cmd/Ctrl+K
+          </button>
+        </div>
+
+        <div
+          v-if="activeQuickPanel"
+          class="mt-3 max-h-[14rem] shrink-0 overflow-auto border border-neutral-200/70 rounded-3xl bg-white/55 p-3 text-xs dark:border-neutral-800 dark:bg-neutral-900/50"
+        >
+          <div class="mb-2 flex items-center justify-between gap-3">
+            <strong class="text-neutral-700 dark:text-neutral-200">
+              {{ activeQuickPanel === 'tts' ? 'TTS controls' : activeQuickPanel === 'llm' ? 'LLM and PicoClaw' : 'Debug tools' }}
+            </strong>
+            <button
+              type="button"
+              class="rounded-full px-2 py-1 text-neutral-500 transition hover:bg-neutral-950/8 dark:text-neutral-300 dark:hover:bg-white/8"
+              @click="activeQuickPanel = null"
+            >
+              Close
+            </button>
+          </div>
+
+          <div v-if="activeQuickPanel === 'tts'" class="grid gap-2">
+            <p class="text-neutral-500 dark:text-neutral-400">
+              Provider: <strong>{{ activeSpeechProvider }}</strong>. Model: <strong>{{ activeSpeechModel || 'none' }}</strong>. Voice: <strong>{{ selectedVoiceName }}</strong>.
+            </p>
+            <button
+              type="button"
+              class="w-full rounded-2xl bg-neutral-950 px-3 py-2 text-white transition dark:bg-white hover:bg-neutral-800 dark:text-neutral-950 dark:hover:bg-neutral-100"
+              @click="void applySpeechProvider(selectedSpeechProvider)"
+            >
+              Apply current TTS provider
+            </button>
+          </div>
+
+          <div v-else-if="activeQuickPanel === 'llm'" class="grid gap-2 text-neutral-600 dark:text-neutral-300">
+            <p>
+              Fast layer: <strong>{{ activeProvider }}</strong> / <strong>{{ activeModel || 'none' }}</strong>.
+            </p>
+            <p>
+              PicoClaw backend: <strong>{{ backendProviderLabel }}</strong>. Model: <strong>{{ picoclawBridgeStatus?.modelName || 'unknown' }}</strong>.
+            </p>
+            <p>
+              API: <strong>{{ picoclawBridgeStatus?.apiBase || 'unknown' }}</strong>. Session: <strong>{{ PICOCLAW_SESSION_ID }}</strong>.
+            </p>
+            <p>
+              {{ picoclawRuntimeSummary }}
+            </p>
+          </div>
+
+          <div v-else class="grid gap-2 text-neutral-600 dark:text-neutral-300">
+            <p>
+              Trace: <strong>{{ picoclawTraceId || 'none yet' }}</strong>. Phase: <strong>{{ picoclawRuntimePhase || 'idle' }}</strong>.
+            </p>
+            <button
+              type="button"
+              class="w-full rounded-2xl bg-neutral-950 px-3 py-2 text-white transition dark:bg-white hover:bg-neutral-800 dark:text-neutral-950 dark:hover:bg-neutral-100"
+              @click="debugPanelOpen = !debugPanelOpen"
+            >
+              {{ debugPanelOpen ? 'Hide runtime logs' : 'Show runtime logs' }}
+            </button>
+          </div>
+        </div>
+
+        <div class="mt-3 max-h-[7rem] shrink-0 overflow-auto text-xs space-y-2">
           <p v-if="bootstrapPending" class="rounded-2xl bg-neutral-900/5 px-3 py-2 text-neutral-600 dark:bg-white/5 dark:text-neutral-300">
             Bootstrapping LM Studio and local voice…
           </p>
@@ -1274,7 +1469,7 @@ watch(vrmMotions, (motions) => {
           </p>
         </div>
 
-        <div class="grid mt-4 gap-3 border border-neutral-200/70 rounded-3xl bg-white/45 p-3 text-xs dark:border-neutral-800 dark:bg-neutral-900/45">
+        <div class="grid mt-3 max-h-[16rem] shrink-0 gap-3 overflow-y-auto border border-neutral-200/70 rounded-3xl bg-white/45 p-3 text-xs dark:border-neutral-800 dark:bg-neutral-900/45">
           <div class="grid grid-cols-2 gap-2">
             <label class="space-y-1">
               <span class="text-neutral-500 dark:text-neutral-400">Avatar</span>
@@ -1510,7 +1705,7 @@ watch(vrmMotions, (motions) => {
           </div>
         </div>
 
-        <div class="mt-4 border border-neutral-200/70 rounded-3xl bg-neutral-950/5 p-3 text-xs dark:border-neutral-800 dark:bg-white/5">
+        <div class="mt-3 shrink-0 border border-neutral-200/70 rounded-3xl bg-neutral-950/5 p-3 text-xs dark:border-neutral-800 dark:bg-white/5">
           <div class="flex items-center justify-between gap-3">
             <strong class="text-neutral-700 dark:text-neutral-200">LLM trace</strong>
             <span
@@ -1526,22 +1721,25 @@ watch(vrmMotions, (motions) => {
               {{ llmTraceLabel }}
             </span>
           </div>
-          <p v-if="llmTracePrompt" class="mt-2 text-neutral-500 dark:text-neutral-400">
+          <p v-if="llmTracePrompt" class="mt-2 truncate text-neutral-500 dark:text-neutral-400">
             Prompt: {{ llmTracePrompt }}
           </p>
-          <pre v-if="streamingPreview" class="mt-2 max-h-28 overflow-auto whitespace-pre-wrap rounded-2xl bg-white/70 p-3 text-[0.68rem] text-neutral-700 dark:bg-neutral-950 dark:text-neutral-200">{{ streamingPreview }}</pre>
+          <pre v-if="streamingPreview" class="mt-2 max-h-20 overflow-auto whitespace-pre-wrap rounded-2xl bg-white/70 p-3 text-[0.68rem] text-neutral-700 dark:bg-neutral-950 dark:text-neutral-200">{{ streamingPreview }}</pre>
         </div>
 
         <div
-          v-if="fastReplyText || visibleStatusText"
-          class="mt-4 border border-neutral-200/70 rounded-3xl bg-white/55 p-3 text-xs dark:border-neutral-800 dark:bg-neutral-900/50"
+          v-if="fastReplyText || visibleStatusText || visibleAgentStatus"
+          class="mt-3 max-h-[8.5rem] shrink-0 overflow-auto border border-neutral-200/70 rounded-3xl bg-white/55 p-3 text-xs dark:border-neutral-800 dark:bg-neutral-900/50"
         >
           <div class="flex items-center justify-between gap-3">
             <strong class="text-neutral-700 dark:text-neutral-200">Live narration</strong>
             <span class="rounded-full bg-neutral-950/8 px-2 py-1 text-[0.68rem] text-neutral-600 dark:bg-white/8 dark:text-neutral-300">
-              {{ fastReplyMode === 'agent' ? 'agent handoff' : fastReplyMode === 'chat' ? 'fast reply' : 'speaking' }}
+              {{ fastReplyMode === 'agent' || agentHandoffActive ? 'agent handoff' : fastReplyMode === 'chat' ? 'fast reply' : 'speaking' }}
             </span>
           </div>
+          <p v-if="visibleAgentStatus" class="mt-2 rounded-2xl bg-violet-500/10 px-3 py-2 text-violet-700 dark:text-violet-200">
+            {{ visibleAgentStatus }}
+          </p>
           <p v-if="fastReplyText" class="mt-2 whitespace-pre-wrap text-neutral-700 dark:text-neutral-200">
             {{ fastReplyText }}
           </p>
@@ -1550,7 +1748,7 @@ watch(vrmMotions, (motions) => {
           </p>
         </div>
 
-        <div class="mt-4 min-h-[12rem] flex-1 overflow-hidden border border-neutral-200/70 rounded-3xl bg-white/55 p-3 dark:border-neutral-800 dark:bg-neutral-900/50">
+        <div class="mt-3 min-h-[16rem] flex-[1_1_45%] overflow-hidden border border-neutral-200/70 rounded-3xl bg-white/55 p-3 dark:border-neutral-800 dark:bg-neutral-900/50">
           <ChatHistory
             :messages="historyMessages"
             :streaming-message="streamingMessage"
@@ -1561,7 +1759,7 @@ watch(vrmMotions, (motions) => {
           />
         </div>
 
-        <form class="mt-4 flex flex-col gap-3" @submit.prevent="handleSend">
+        <form class="mt-3 flex shrink-0 flex-col gap-3" @submit.prevent="handleSend">
           <BasicTextarea
             v-model="messageInput"
             placeholder="Say something to the avatar…"
@@ -1571,7 +1769,7 @@ watch(vrmMotions, (motions) => {
 
           <div class="flex items-center justify-between gap-3">
             <p class="text-xs text-neutral-500 dark:text-neutral-400">
-              Enter to send, Shift+Enter for newline.
+              Enter to send, Shift+Enter for newline. Cmd/Ctrl+K opens quick actions.
             </p>
 
             <button
@@ -1584,11 +1782,18 @@ watch(vrmMotions, (motions) => {
           </div>
         </form>
 
-        <details class="mt-4 border border-neutral-200/70 rounded-3xl bg-neutral-950/5 p-3 text-xs dark:border-neutral-800 dark:bg-white/5" open>
-          <summary class="cursor-pointer select-none text-neutral-600 font-medium dark:text-neutral-300">
-            PicoClaw runtime logs
-          </summary>
-          <div class="grid mt-3 gap-2 rounded-2xl bg-white/70 p-3 text-neutral-600 dark:bg-neutral-950 dark:text-neutral-300">
+        <div class="mt-3 shrink-0 border border-neutral-200/70 rounded-3xl bg-neutral-950/5 p-3 text-xs dark:border-neutral-800 dark:bg-white/5">
+          <button
+            type="button"
+            class="w-full flex items-center justify-between gap-3 text-left text-neutral-600 font-medium dark:text-neutral-300"
+            @click="debugPanelOpen = !debugPanelOpen"
+          >
+            <span>PicoClaw runtime logs</span>
+            <span class="rounded-full bg-neutral-950/8 px-2 py-1 text-[0.68rem] dark:bg-white/8">
+              {{ debugPanelOpen ? 'open' : 'collapsed' }}
+            </span>
+          </button>
+          <div v-if="debugPanelOpen" class="grid mt-3 max-h-[18rem] gap-2 overflow-auto rounded-2xl bg-white/70 p-3 text-neutral-600 dark:bg-neutral-950 dark:text-neutral-300">
             <p>
               Agent mode: <strong>real PicoClaw CLI</strong>. Backend: <strong>{{ backendProviderLabel }}</strong>. Filesystem/tools: <strong>{{ picoclawBridgeStatus?.workspaceRestricted ? 'workspace restricted' : picoclawBridgeStatus?.fullAccess ? 'full access enabled' : 'see PicoClaw config' }}</strong>. PicoClaw CLI/runtime bridge: <strong>{{ picoclawConnected ? 'connected' : 'offline' }}</strong>.
             </p>
@@ -1599,10 +1804,69 @@ watch(vrmMotions, (motions) => {
               Active AIRI card: <strong>{{ activeCardId }}</strong>. AIRI card prompt is used for avatar identity only here; PicoClaw uses its own workspace prompt. AIRI prompt preview:
             </p>
             <pre class="max-h-28 overflow-auto whitespace-pre-wrap text-[0.68rem]">{{ systemPromptPreview }}</pre>
+            <p>
+              Fast-layer user prompt:
+            </p>
+            <pre class="max-h-24 overflow-auto whitespace-pre-wrap text-[0.68rem]">{{ lastFastLayerUserPrompt || 'No prompt sent yet.' }}</pre>
+            <p>
+              Fast-layer AIRI system prompt preview:
+            </p>
+            <pre class="max-h-32 overflow-auto whitespace-pre-wrap text-[0.68rem]">{{ fastLayerAiriPromptPreview }}</pre>
+            <p>
+              Fast-layer VRM motion allowlist: <strong>{{ fastLayerVrmMotionPreview }}</strong>
+            </p>
+            <p>
+              Trace: <strong>{{ picoclawTraceId || 'none yet' }}</strong>. Runtime phase: <strong>{{ picoclawRuntimePhase || 'idle' }}</strong>.
+            </p>
+            <pre class="mt-1 max-h-48 overflow-auto whitespace-pre-wrap rounded-2xl bg-neutral-950 p-3 text-[0.68rem] text-emerald-100">{{ logsText || 'No logs yet.' }}</pre>
           </div>
-          <pre class="mt-3 max-h-48 overflow-auto whitespace-pre-wrap rounded-2xl bg-neutral-950 p-3 text-[0.68rem] text-emerald-100">{{ logsText || 'No logs yet.' }}</pre>
-        </details>
+        </div>
       </aside>
+    </div>
+
+    <div
+      v-if="commandPaletteOpen"
+      class="fixed inset-0 z-50 flex items-start justify-center bg-black/35 px-4 pt-[12dvh] backdrop-blur-sm"
+      @click.self="closeCommandPalette"
+    >
+      <div class="max-w-md w-full overflow-hidden border border-white/20 rounded-3xl bg-white text-neutral-900 shadow-2xl dark:bg-neutral-950 dark:text-neutral-100">
+        <div class="flex items-center justify-between border-b border-neutral-200 px-4 py-3 dark:border-neutral-800">
+          <strong>Quick actions</strong>
+          <button
+            type="button"
+            class="rounded-full px-2 py-1 text-neutral-500 transition hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800"
+            @click="closeCommandPalette"
+          >
+            Esc
+          </button>
+        </div>
+        <div class="grid gap-1 p-2 text-sm">
+          <button
+            type="button"
+            class="rounded-2xl px-3 py-3 text-left transition hover:bg-neutral-100 dark:hover:bg-neutral-900"
+            @click="openQuickPanel('tts')"
+          >
+            <span class="block font-medium">Open TTS selector</span>
+            <span class="block text-xs text-neutral-500 dark:text-neutral-400">Change voice provider, model, voice, and input language.</span>
+          </button>
+          <button
+            type="button"
+            class="rounded-2xl px-3 py-3 text-left transition hover:bg-neutral-100 dark:hover:bg-neutral-900"
+            @click="openQuickPanel('llm')"
+          >
+            <span class="block font-medium">Open LLM provider status</span>
+            <span class="block text-xs text-neutral-500 dark:text-neutral-400">Inspect fast layer and PicoClaw backend configuration.</span>
+          </button>
+          <button
+            type="button"
+            class="rounded-2xl px-3 py-3 text-left transition hover:bg-neutral-100 dark:hover:bg-neutral-900"
+            @click="openQuickPanel('debug')"
+          >
+            <span class="block font-medium">Open debug logs</span>
+            <span class="block text-xs text-neutral-500 dark:text-neutral-400">Show trace, prompts, runtime phase, and bounded logs.</span>
+          </button>
+        </div>
+      </div>
     </div>
   </BackgroundProvider>
 </template>

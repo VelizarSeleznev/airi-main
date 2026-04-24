@@ -62,6 +62,18 @@ describe('buildFastLayerSystemPrompt', () => {
     expect(result).toContain('Do not invent new motion names.')
     expect(result).toContain('The exact ACT.motion value must stay the motion id itself')
   })
+
+  /**
+   * @example
+   * buildFastLayerSystemPrompt('Stay in character.', ['idle_loop'])
+   */
+  it('instructs the fast layer to request agent mode for tool and coding work', () => {
+    const result = buildFastLayerSystemPrompt('Stay in character.', ['idle_loop'])
+
+    expect(result).toContain('If the user is asking for tool usage, filesystem inspection, coding work, or a longer background task, start the first line with [agent].')
+    expect(result).toContain('If no background task is needed, do not use [agent].')
+    expect(result).toContain('Do not explain the marker.')
+  })
 })
 
 describe('writeSse', () => {
