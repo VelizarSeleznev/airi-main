@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 const props = withDefaults(defineProps<{
   stream?: MediaStream
@@ -13,6 +13,10 @@ const props = withDefaults(defineProps<{
 })
 
 const frequencies = ref<number[]>(Array.from<number>({ length: props.bars }).fill(0))
+let audioContext: AudioContext | undefined
+let source: MediaStreamAudioSourceNode | undefined
+let animationFrame: number | undefined
+let lastAnalyzedAt = 0
 
 onMounted(() => {
   handleAnalyze()
@@ -20,13 +24,39 @@ onMounted(() => {
 
 watch(() => props.stream, handleAnalyze)
 
+onBeforeUnmount(() => {
+  stopAnalyze()
+})
+
+function stopAnalyze() {
+  if (animationFrame) {
+    cancelAnimationFrame(animationFrame)
+    animationFrame = undefined
+  }
+
+  try {
+    source?.disconnect()
+  }
+  catch {
+
+  }
+
+  source = undefined
+
+  void audioContext?.close()
+  audioContext = undefined
+  lastAnalyzedAt = 0
+}
+
 function handleAnalyze() {
+  stopAnalyze()
+
   if (!props.stream) {
     return
   }
 
-  const audioContext = new (window.AudioContext || (window as unknown as any).webkitAudioContext)()
-  const source = audioContext.createMediaStreamSource(props.stream)
+  audioContext = new (window.AudioContext || (window as unknown as any).webkitAudioContext)()
+  source = audioContext.createMediaStreamSource(props.stream)
   const analyser = audioContext.createAnalyser()
 
   analyser.fftSize = 2048
@@ -47,9 +77,13 @@ function handleAnalyze() {
   // Calculate bins per bar based on the filtered frequency range
   const binsPerBar = Math.floor(usableBins / props.bars)
 
-  const analyze = () => {
+  const analyze = (now: number) => {
     try {
-      requestAnimationFrame(analyze)
+      animationFrame = requestAnimationFrame(analyze)
+      if (now - lastAnalyzedAt < 33)
+        return
+      lastAnalyzedAt = now
+
       analyser.getByteFrequencyData(dataArray)
 
       const bars = Array.from<number>({ length: props.bars }).fill(0)
@@ -74,7 +108,7 @@ function handleAnalyze() {
     }
   }
 
-  analyze()
+  animationFrame = requestAnimationFrame(analyze)
 }
 </script>
 

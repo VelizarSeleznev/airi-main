@@ -1,9 +1,38 @@
 import { onUnmounted, ref } from 'vue'
 
-export function useAudioAnalyzer() {
+export interface UseAudioAnalyzerOptions {
+  /**
+   * Controls how often the analyser samples the current audio stream.
+   *
+   * Use when:
+   * - A visual meter needs stable updates without running at display refresh rate
+   * - Battery usage matters more than frame-perfect waveform updates
+   *
+   * Expects:
+   * - A positive millisecond interval
+   *
+   * @default 50
+   */
+  updateIntervalMs?: number
+}
+
+/**
+ * Creates a throttled audio analyser loop for microphone and playback meters.
+ *
+ * Use when:
+ * - UI needs a coarse volume level from an `AnalyserNode`
+ * - Consumers need explicit start/stop control for component cleanup
+ *
+ * Expects:
+ * - `startAnalyzer` receives a live `AudioContext`
+ *
+ * Returns:
+ * - Reactive volume/error state and analyser lifecycle helpers
+ */
+export function useAudioAnalyzer(options: UseAudioAnalyzerOptions = {}) {
   const analyzer = ref<AnalyserNode>()
   const dataArray = ref<Uint8Array<ArrayBuffer>>()
-  const animationFrame = ref<number>()
+  const timer = ref<ReturnType<typeof setTimeout>>()
 
   const onAnalyzerUpdateHooks = ref<Array<(volumeLevel: number) => void | Promise<void>>>([])
 
@@ -21,12 +50,16 @@ export function useAudioAnalyzer() {
   }
 
   function start() {
-    if (animationFrame.value)
+    if (timer.value)
       return // prevent multiple loops
 
+    const updateIntervalMs = Math.max(16, options.updateIntervalMs ?? 50)
+
     const analyze = () => {
-      if (!analyzer.value || !dataArray.value)
+      if (!analyzer.value || !dataArray.value) {
+        timer.value = undefined
         return
+      }
 
       // Get frequency data for volume visualization
       analyzer.value.getByteFrequencyData(dataArray.value)
@@ -43,7 +76,13 @@ export function useAudioAnalyzer() {
         hook(volumeLevel.value)
       }
 
-      animationFrame.value = requestAnimationFrame(analyze)
+      // NOTICE:
+      // Volume meters do not need display-refresh sampling. A timer keeps UI responsive
+      // while avoiding a permanent 60fps RAF loop on battery.
+      // Root cause summary: mic indicators previously sampled on every animation frame.
+      // Source/context: `indicator-mic-volume.vue` only renders a coarse 0-100 level.
+      // Removal condition: delete this throttle only if a consumer needs frame-accurate audio visualization.
+      timer.value = setTimeout(analyze, updateIntervalMs)
     }
 
     analyze()
@@ -76,10 +115,10 @@ export function useAudioAnalyzer() {
   }
 
   function stopAnalyzer() {
-    // Stop animation frame
-    if (animationFrame.value) {
-      cancelAnimationFrame(animationFrame.value)
-      animationFrame.value = undefined
+    // Stop scheduled analysis loop.
+    if (timer.value) {
+      clearTimeout(timer.value)
+      timer.value = undefined
     }
 
     analyzer.value = undefined
