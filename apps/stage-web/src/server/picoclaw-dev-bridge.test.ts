@@ -1,6 +1,10 @@
+import type { AddressInfo } from 'node:net'
+
+import { createServer } from 'node:http'
+
 import { describe, expect, it } from 'vitest'
 
-import { buildFastLayerSystemPrompt, deriveVisibleStatus } from './picoclaw-dev-bridge'
+import { buildFastLayerSystemPrompt, deriveVisibleStatus, extractTerminalRuntimeStatus, writeSse } from './picoclaw-dev-bridge'
 
 describe('deriveVisibleStatus', () => {
   /**
@@ -57,5 +61,84 @@ describe('buildFastLayerSystemPrompt', () => {
     expect(result).toContain('- VRMA_03 (curious lean-in)')
     expect(result).toContain('Do not invent new motion names.')
     expect(result).toContain('The exact ACT.motion value must stay the motion id itself')
+  })
+})
+
+describe('writeSse', () => {
+  /**
+   * @example
+   * writeSse(res, 'error', { message: 'docker failed' })
+   */
+  it('keeps streaming after headers have already been flushed', async () => {
+    // ROOT CAUSE:
+    //
+    // If PicoClaw setup failed after the bridge opened its SSE stream, the
+    // error path tried to set CORS headers again inside writeSse.
+    //
+    // Before the patch, Node threw ERR_HTTP_HEADERS_SENT here and killed Vite.
+    //
+    // We fixed this by only setting SSE CORS headers while response headers
+    // are still mutable, then always writing the event frame.
+    const server = createServer((_req, res) => {
+      res.statusCode = 200
+      res.setHeader('Content-Type', 'text/event-stream; charset=utf-8')
+      res.flushHeaders()
+      writeSse(res, 'error', { message: 'docker failed' })
+      res.end()
+    })
+
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject)
+      server.listen(0, resolve)
+    })
+
+    try {
+      const { port } = server.address() as AddressInfo
+      const response = await fetch(`http://127.0.0.1:${port}`)
+      const text = await response.text()
+
+      expect(response.ok).toBe(true)
+      expect(text).toContain('event: error')
+      expect(text).toContain('data: {"message":"docker failed"}')
+    }
+    finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => {
+          if (error) {
+            reject(error)
+            return
+          }
+          resolve()
+        })
+      })
+    }
+  })
+})
+
+describe('extractTerminalRuntimeStatus', () => {
+  /**
+   * @example
+   * extractTerminalRuntimeStatus('Error: error processing message: LLM call failed')
+   */
+  it('normalizes non-zero PicoClaw exits into runtime status text', () => {
+    // ROOT CAUSE:
+    //
+    // PicoClaw can exit non-zero after printing `Error: error processing
+    // message:` without emitting the lobster final marker. Before this patch,
+    // the bridge sent `done` with an empty final and the UI hid the real cause
+    // behind "completed without a final assistant response".
+    //
+    // We fixed this by carrying the terminal CLI failure through
+    // `runtime_status` so the chat surface can show the provider error.
+    const result = extractTerminalRuntimeStatus([
+      '10:02:16 ERR agent LLM call failed',
+      'Error: error processing message: LLM call failed after retries:',
+      '  Status: 404',
+      '  Body: {"error":{"message":"No endpoints found for elephant-alpha."}}',
+    ].join('\n'))
+
+    expect(result).toContain('Error processing message: LLM call failed after retries:')
+    expect(result).toContain('Status: 404')
+    expect(result).toContain('No endpoints found for elephant-alpha.')
   })
 })

@@ -193,10 +193,26 @@ function writeJson(res: ServerResponse, statusCode: number, data: unknown) {
   res.end(JSON.stringify(data))
 }
 
-function writeSse(res: ServerResponse, event: string, data: unknown) {
-  res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+/**
+ * Writes one server-sent event frame to an open HTTP response.
+ *
+ * Use when:
+ * - Streaming PicoClaw runtime, error, and completion events to the browser.
+ * - The response may already have flushed headers for a long-lived SSE stream.
+ *
+ * Expects:
+ * - The caller owns response lifecycle and ends it after the final event.
+ * - Headers may be mutable before the first frame, or already sent after `flushHeaders()`.
+ *
+ * Returns:
+ * - A valid SSE event frame appended to the response body.
+ */
+export function writeSse(res: ServerResponse, event: string, data: unknown) {
+  if (!res.headersSent) {
+    res.setHeader('Access-Control-Allow-Origin', '*')
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+  }
   res.write(`event: ${event}\n`)
   res.write(`data: ${JSON.stringify(data)}\n\n`)
 }
@@ -921,6 +937,28 @@ function isRuntimeStatusFinal(text: string) {
     || text.startsWith(PROCESSING_ERROR_PREFIX)
 }
 
+/**
+ * Extracts a terminal PicoClaw runtime failure from combined CLI output.
+ *
+ * Use when:
+ * - PicoClaw exits non-zero without printing a final assistant marker.
+ * - The browser needs the real CLI failure instead of a generic missing-final error.
+ *
+ * Expects:
+ * - Raw stdout/stderr collected from one PicoClaw process run.
+ *
+ * Returns:
+ * - A compact runtime status suitable for SSE `runtime_status`, or an empty string.
+ */
+export function extractTerminalRuntimeStatus(output: string) {
+  const marker = /Error:\s*error processing message:\s*/i
+  const match = marker.exec(output)
+  if (!match)
+    return ''
+
+  return `${PROCESSING_ERROR_PREFIX} ${output.slice(match.index + match[0].length).trim()}`
+}
+
 async function createFallbackRuntimeConfig(sourcePath: string, runtimeConfig: Awaited<ReturnType<typeof createRuntimeConfig>>) {
   const rawConfig = await readFile(sourcePath, 'utf8')
   const parsed = JSON.parse(rawConfig) as PicoClawConfig
@@ -1235,6 +1273,9 @@ async function handleAgent(req: IncomingMessage, res: ServerResponse) {
             runtimeStatusText = finalText
             finalText = ''
           }
+          else if (!finalText && fallbackCode !== 0) {
+            runtimeStatusText = extractTerminalRuntimeStatus(combinedOutput)
+          }
 
           trace('fallback_close', {
             code: fallbackCode,
@@ -1269,6 +1310,9 @@ async function handleAgent(req: IncomingMessage, res: ServerResponse) {
     if (finalText && isRuntimeStatusFinal(finalText)) {
       runtimeStatusText = finalText
       finalText = ''
+    }
+    else if (!finalText && code !== 0) {
+      runtimeStatusText = extractTerminalRuntimeStatus(combinedOutput)
     }
 
     trace('turn_close', {
