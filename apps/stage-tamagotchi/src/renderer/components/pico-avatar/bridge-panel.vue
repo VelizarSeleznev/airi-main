@@ -4,6 +4,7 @@ import type { ChatHistoryItem } from '@proj-airi/stage-ui/types/chat'
 import { useElectronEventaInvoke } from '@proj-airi/electron-vueuse'
 import { ChatHistory } from '@proj-airi/stage-ui/components'
 import { useChatOrchestratorStore } from '@proj-airi/stage-ui/stores/chat'
+import { useChatMaintenanceStore } from '@proj-airi/stage-ui/stores/chat/maintenance'
 import { useChatSessionStore } from '@proj-airi/stage-ui/stores/chat/session-store'
 import { useChatStreamStore } from '@proj-airi/stage-ui/stores/chat/stream-store'
 import { useConsciousnessStore } from '@proj-airi/stage-ui/stores/modules/consciousness'
@@ -24,6 +25,7 @@ const AUTO_REFRESH_OWNER = 'tamagotchi-main-stage'
 const { isReady } = useDeferredMount()
 const bridgeStore = usePicoAvatarBridgeStore()
 const chatOrchestratorStore = useChatOrchestratorStore()
+const chatMaintenanceStore = useChatMaintenanceStore()
 const chatSessionStore = useChatSessionStore()
 const chatStreamStore = useChatStreamStore()
 const consciousnessStore = useConsciousnessStore()
@@ -82,6 +84,11 @@ function handleKeydown(event: KeyboardEvent) {
 
   event.preventDefault()
   void handleSend()
+}
+
+function handleClearChat() {
+  chatMaintenanceStore.cleanupMessages()
+  bridgeStore.clearVisibleStatus()
 }
 
 onMounted(() => {
@@ -196,8 +203,18 @@ onUnmounted(() => {
     </div>
 
     <div :class="['min-h-0 flex-1 overflow-hidden rounded-2xl border border-neutral-200/70 bg-neutral-50/80 dark:border-neutral-800 dark:bg-neutral-900/60']">
-      <div :class="['border-b border-neutral-200/70 px-3 py-2 text-sm font-medium dark:border-neutral-800']">
-        Shared Chat
+      <div :class="['flex items-center justify-between gap-2 border-b border-neutral-200/70 px-3 py-2 dark:border-neutral-800']">
+        <div :class="['text-sm font-medium']">
+          Shared Chat
+        </div>
+        <Button
+          size="sm"
+          variant="ghost"
+          :disabled="sending"
+          @click="handleClearChat"
+        >
+          Clear
+        </Button>
       </div>
       <div :class="['h-full min-h-0 px-2 py-2']">
         <ChatHistory
