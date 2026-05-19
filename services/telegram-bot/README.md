@@ -46,11 +46,11 @@ EMBEDDING_API_KEY=''
 EMBEDDING_MODEL=''
 EMBEDDING_DIMENSION=''
 
-TENOR_API_KEY=''
-TENOR_CLIENT_KEY='otter_sticker_bot'
-TENOR_LOCALE='ru_RU'
-TENOR_COUNTRY='US'
-TENOR_CONTENT_FILTER='medium'
+KLIPY_API_KEY=''
+KLIPY_CLIENT_KEY='otter_sticker_bot'
+KLIPY_LOCALE='ru_RU'
+KLIPY_COUNTRY='US'
+KLIPY_CONTENT_FILTER='medium'
 ```
 
 For example:
@@ -73,20 +73,20 @@ EMBEDDING_API_KEY=''
 EMBEDDING_MODEL='nomic-embed-text' # embedding model
 EMBEDDING_DIMENSION='768' # must set
 
-TENOR_API_KEY='<Tenor API key>'
-TENOR_CLIENT_KEY='otter_sticker_bot'
-TENOR_LOCALE='ru_RU'
-TENOR_COUNTRY='US'
-TENOR_CONTENT_FILTER='medium'
+KLIPY_API_KEY='<Klipy API key>'
+KLIPY_CLIENT_KEY='otter_sticker_bot'
+KLIPY_LOCALE='ru_RU'
+KLIPY_COUNTRY='US'
+KLIPY_CONTENT_FILTER='medium'
 ```
 
-Enable Telegram inline mode in BotFather before using Tenor search:
+Enable Telegram inline mode in BotFather before using Klipy search:
 
 ```shell
 /setinline
 ```
 
-After that, type `@otter_sticker_bot запрос` in any Telegram chat to get Tenor GIF previews.
+After that, type `@otter_sticker_bot запрос` in any Telegram chat to get Klipy GIF previews.
 
 Start both DB and the bot:
 

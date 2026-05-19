@@ -3,53 +3,53 @@ import type { InlineQueryResultGif } from 'grammy/types'
 import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
 
-const TENOR_SEARCH_URL = 'https://tenor.googleapis.com/v2/search'
+const KLIPY_SEARCH_URL = 'https://api.klipy.com/v2/search'
 const DEFAULT_LIMIT = 20
 
-interface TenorMediaFormat {
+interface KlipyMediaFormat {
   url: string
   dims?: [number, number]
   duration?: number
   size?: number
 }
 
-interface TenorResult {
+interface KlipyResult {
   id: string
   content_description?: string
   tags?: string[]
-  media_formats: Record<string, TenorMediaFormat | undefined>
+  media_formats: Record<string, KlipyMediaFormat | undefined>
 }
 
-interface TenorSearchResponse {
+interface KlipySearchResponse {
   next?: string
-  results: TenorResult[]
+  results: KlipyResult[]
 }
 
-export interface TenorSearchOptions {
+export interface KlipySearchOptions {
   /**
-   * Tenor API key used for privileged API access.
+   * Klipy API key used for privileged API access.
    *
    * Use when:
-   * - Calling Tenor v2 search from Telegram inline mode.
-   * - Running integration tests against real Tenor responses.
+   * - Calling Klipy v2 search from Telegram inline mode.
+   * - Running integration tests against real Klipy responses.
    *
-   * The use case is runtime configuration through `TENOR_API_KEY`.
+   * The use case is runtime configuration through `KLIPY_API_KEY`.
    */
   apiKey: string
 
   /**
-   * Stable integration identifier sent to Tenor as `client_key`.
+   * Stable integration identifier sent to Klipy as `client_key`.
    *
    * Use when:
    * - Distinguishing this bot from other apps using the same API key.
-   * - Improving Tenor search telemetry for this integration.
+   * - Improving Klipy search telemetry for this integration.
    *
    * @default 'otter_sticker_bot'
    */
   clientKey?: string
 
   /**
-   * Locale used by Tenor to interpret the search query.
+   * Locale used by Klipy to interpret the search query.
    *
    * Use when:
    * - Users type non-English queries.
@@ -60,7 +60,7 @@ export interface TenorSearchOptions {
   locale?: string
 
   /**
-   * Country hint sent to Tenor.
+   * Country hint sent to Klipy.
    *
    * Use when:
    * - Results should be localized for a specific region.
@@ -70,7 +70,7 @@ export interface TenorSearchOptions {
   country?: string
 
   /**
-   * Tenor content filter level.
+   * Klipy content filter level.
    *
    * Use when:
    * - Inline GIF results are shown in arbitrary Telegram chats.
@@ -90,7 +90,7 @@ export interface TenorSearchOptions {
   limit?: number
 
   /**
-   * Tenor pagination cursor from a previous search response.
+   * Klipy pagination cursor from a previous search response.
    *
    * Use when:
    * - Telegram sends the inline query offset for the next page.
@@ -103,14 +103,14 @@ export interface TenorSearchOptions {
    * Fetch implementation for tests and alternate runtimes.
    *
    * Use when:
-   * - Mocking Tenor in unit tests.
+   * - Mocking Klipy in unit tests.
    *
    * @default globalThis.fetch
    */
   fetchImpl?: typeof fetch
 }
 
-export interface TenorInlineSearchResult {
+export interface KlipyInlineSearchResult {
   /**
    * GIF results ready for Telegram `answerInlineQuery`.
    *
@@ -129,40 +129,40 @@ export interface TenorInlineSearchResult {
    * - Telegram asks for the next inline result page.
    *
    * Returns:
-   * - Empty string when Tenor has no next page.
+   * - Empty string when Klipy has no next page.
    */
   nextOffset: string
 }
 
 /**
- * Searches Tenor and converts GIFs into Telegram inline results.
+ * Searches Klipy and converts GIFs into Telegram inline results.
  *
  * Use when:
- * - A Telegram inline query should show Tenor GIF previews.
+ * - A Telegram inline query should show Klipy GIF previews.
  * - The bot is invoked as `@bot query` from any chat.
  *
  * Expects:
  * - `query` is the user's raw inline query text.
- * - `options.apiKey` is a valid Tenor v2 API key.
+ * - `options.apiKey` is a valid Klipy v2 API key.
  *
  * Returns:
- * - Telegram `InlineQueryResultGif` objects and a Tenor pagination cursor.
+ * - Telegram `InlineQueryResultGif` objects and a Klipy pagination cursor.
  */
-export async function searchTenorInlineGifs(query: string, options: TenorSearchOptions): Promise<TenorInlineSearchResult> {
+export async function searchKlipyInlineGifs(query: string, options: KlipySearchOptions): Promise<KlipyInlineSearchResult> {
   const trimmedQuery = query.trim()
   if (trimmedQuery.length === 0) {
     return { results: [], nextOffset: '' }
   }
 
   const fetchImpl = options.fetchImpl ?? globalThis.fetch
-  const url = buildTenorSearchUrl(trimmedQuery, options)
+  const url = buildKlipySearchUrl(trimmedQuery, options)
   const response = await fetchImpl(url)
 
   if (!response.ok) {
-    throw new Error(`Tenor search failed with HTTP ${response.status}`)
+    throw new Error(`Klipy search failed with HTTP ${response.status}`)
   }
 
-  const payload = parseTenorSearchResponse(await response.json())
+  const payload = parseKlipySearchResponse(await response.json())
   return {
     results: payload.results.map(toInlineGifResult).filter((result): result is InlineQueryResultGif => result != null),
     nextOffset: payload.next ?? '',
@@ -170,20 +170,20 @@ export async function searchTenorInlineGifs(query: string, options: TenorSearchO
 }
 
 /**
- * Builds a Tenor v2 search URL with the formats Telegram needs for inline GIFs.
+ * Builds a Klipy v2 search URL with the formats Telegram needs for inline GIFs.
  *
  * Use when:
- * - Testing Tenor request parameters.
+ * - Testing Klipy request parameters.
  * - Creating the runtime search URL before a fetch call.
  *
  * Expects:
  * - `query` is already trimmed and non-empty.
  *
  * Returns:
- * - A fully qualified Tenor v2 search URL.
+ * - A fully qualified Klipy v2 search URL.
  */
-export function buildTenorSearchUrl(query: string, options: TenorSearchOptions): string {
-  const url = new URL(TENOR_SEARCH_URL)
+export function buildKlipySearchUrl(query: string, options: KlipySearchOptions): string {
+  const url = new URL(KLIPY_SEARCH_URL)
   url.searchParams.set('q', query)
   url.searchParams.set('key', options.apiKey)
   url.searchParams.set('client_key', options.clientKey ?? 'otter_sticker_bot')
@@ -201,19 +201,19 @@ export function buildTenorSearchUrl(query: string, options: TenorSearchOptions):
 }
 
 /**
- * Converts one Tenor response object into a Telegram GIF inline result.
+ * Converts one Klipy response object into a Telegram GIF inline result.
  *
  * Use when:
- * - Mapping Tenor API responses to Bot API inline results.
+ * - Mapping Klipy API responses to Bot API inline results.
  *
  * Expects:
  * - `tinygif` or `gif` exists for the sent GIF.
  * - `nanogif`, `tinygif`, or `gif` exists for the preview thumbnail.
  *
  * Returns:
- * - `undefined` when the Tenor item lacks usable media URLs.
+ * - `undefined` when the Klipy item lacks usable media URLs.
  */
-export function toInlineGifResult(result: TenorResult): InlineQueryResultGif | undefined {
+export function toInlineGifResult(result: KlipyResult): InlineQueryResultGif | undefined {
   const gif = result.media_formats.tinygif ?? result.media_formats.gif
   const thumbnail = result.media_formats.nanogif ?? result.media_formats.tinygif ?? result.media_formats.gif
 
@@ -222,7 +222,7 @@ export function toInlineGifResult(result: TenorResult): InlineQueryResultGif | u
   }
 
   const [gif_width, gif_height] = gif.dims ?? []
-  const title = result.content_description || result.tags?.slice(0, 3).join(', ') || 'Tenor GIF'
+  const title = result.content_description || result.tags?.slice(0, 3).join(', ') || 'Klipy GIF'
 
   return {
     type: 'gif',
@@ -236,16 +236,16 @@ export function toInlineGifResult(result: TenorResult): InlineQueryResultGif | u
   }
 }
 
-function telegramInlineResultId(tenorId: string): string {
-  const id = `tenor-${tenorId}`
+function telegramInlineResultId(klipyId: string): string {
+  const id = `klipy-${klipyId}`
   if (Buffer.byteLength(id, 'utf8') <= 64) {
     return id
   }
 
-  return `tenor-${createHash('sha256').update(tenorId).digest('hex').slice(0, 24)}`
+  return `klipy-${createHash('sha256').update(klipyId).digest('hex').slice(0, 24)}`
 }
 
-function parseTenorSearchResponse(value: unknown): TenorSearchResponse {
+function parseKlipySearchResponse(value: unknown): KlipySearchResponse {
   if (!isRecord(value)) {
     return { results: [] }
   }
@@ -253,18 +253,18 @@ function parseTenorSearchResponse(value: unknown): TenorSearchResponse {
   const rawResults = Array.isArray(value.results) ? value.results : []
   return {
     next: typeof value.next === 'string' ? value.next : '',
-    results: rawResults.map(parseTenorResult).filter((result): result is TenorResult => result != null),
+    results: rawResults.map(parseKlipyResult).filter((result): result is KlipyResult => result != null),
   }
 }
 
-function parseTenorResult(value: unknown): TenorResult | undefined {
+function parseKlipyResult(value: unknown): KlipyResult | undefined {
   if (!isRecord(value) || typeof value.id !== 'string' || !isRecord(value.media_formats)) {
     return undefined
   }
 
-  const mediaFormats: Record<string, TenorMediaFormat | undefined> = {}
+  const mediaFormats: Record<string, KlipyMediaFormat | undefined> = {}
   for (const [name, format] of Object.entries(value.media_formats)) {
-    const parsed = parseTenorMediaFormat(format)
+    const parsed = parseKlipyMediaFormat(format)
     if (parsed) {
       mediaFormats[name] = parsed
     }
@@ -278,7 +278,7 @@ function parseTenorResult(value: unknown): TenorResult | undefined {
   }
 }
 
-function parseTenorMediaFormat(value: unknown): TenorMediaFormat | undefined {
+function parseKlipyMediaFormat(value: unknown): KlipyMediaFormat | undefined {
   if (!isRecord(value) || typeof value.url !== 'string') {
     return undefined
   }
