@@ -6,7 +6,7 @@ import type { Action, BotContext, ChatContext, ExtendedContext } from '../../typ
 import { env } from 'node:process'
 
 import { useLogg } from '@guiiai/logg'
-import { sleep } from '@moeru/std'
+import { errorMessageFrom, sleep } from '@moeru/std'
 import { message } from '@xsai/utils-chat'
 import { Bot } from 'grammy'
 
@@ -16,6 +16,7 @@ import { interpretSticker } from '../../llm/sticker'
 import { findStickerByFileId, findStickersByFileIds, recordMessage } from '../../models'
 import { listJoinedChats, recordJoinedChat } from '../../models/chats'
 import { listStickerPacks, recordStickerPack } from '../../models/sticker-packs'
+import { searchTenorInlineGifs } from '../../tenor'
 import { readMessage } from './agent/actions/read-message'
 import { sendMessage } from './agent/actions/send-message'
 // import { shouldInterruptProcessing } from './agent/interruption'
@@ -460,6 +461,44 @@ export async function startTelegramBot() {
   telegramBot.errorHandler = async err => log.withError(err).log('Error occurred')
 
   const botCtx = createBotContext(telegramBot, log)
+
+  telegramBot.on('inline_query', async (ctx) => {
+    const tenorApiKey = env.TENOR_API_KEY
+    if (!tenorApiKey) {
+      log.log('TENOR_API_KEY is not configured - answering inline query with no results')
+      await ctx.answerInlineQuery([], {
+        cache_time: 1,
+        is_personal: true,
+      })
+      return
+    }
+
+    try {
+      const result = await searchTenorInlineGifs(ctx.inlineQuery.query, {
+        apiKey: tenorApiKey,
+        clientKey: env.TENOR_CLIENT_KEY || 'otter_sticker_bot',
+        locale: env.TENOR_LOCALE || 'ru_RU',
+        country: env.TENOR_COUNTRY || 'US',
+        contentFilter: env.TENOR_CONTENT_FILTER === 'off' || env.TENOR_CONTENT_FILTER === 'low' || env.TENOR_CONTENT_FILTER === 'high'
+          ? env.TENOR_CONTENT_FILTER
+          : 'medium',
+        pos: ctx.inlineQuery.offset,
+      })
+
+      await ctx.answerInlineQuery(result.results, {
+        cache_time: 60,
+        is_personal: true,
+        next_offset: result.nextOffset,
+      })
+    }
+    catch (error) {
+      log.withError(error).withField('query', ctx.inlineQuery.query).log(`Tenor inline query failed: ${errorMessageFrom(error) ?? 'Unknown error'}`)
+      await ctx.answerInlineQuery([], {
+        cache_time: 1,
+        is_personal: true,
+      })
+    }
+  })
 
   telegramBot.command('add_sticker_pack', async (ctx) => {
     if (!(await isChatIdBotAdmin(ctx.message.from.id))) {
