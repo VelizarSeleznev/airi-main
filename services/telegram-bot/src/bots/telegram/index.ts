@@ -10,13 +10,13 @@ import { errorMessageFrom, sleep } from '@moeru/std'
 import { message } from '@xsai/utils-chat'
 import { Bot } from 'grammy'
 
-import { searchKlipyInlineGifs } from '../../klipy'
 import { imagineAnAction } from '../../llm/actions'
 import { interpretPhotos } from '../../llm/photo'
 import { interpretSticker } from '../../llm/sticker'
 import { findStickerByFileId, findStickersByFileIds, recordMessage } from '../../models'
 import { listJoinedChats, recordJoinedChat } from '../../models/chats'
 import { listStickerPacks, recordStickerPack } from '../../models/sticker-packs'
+import { searchTenorInlineGifs } from '../../tenor'
 import { readMessage } from './agent/actions/read-message'
 import { sendMessage } from './agent/actions/send-message'
 // import { shouldInterruptProcessing } from './agent/interruption'
@@ -463,9 +463,9 @@ export async function startTelegramBot() {
   const botCtx = createBotContext(telegramBot, log)
 
   telegramBot.on('inline_query', async (ctx) => {
-    const klipyApiKey = env.KLIPY_API_KEY
-    if (!klipyApiKey) {
-      log.log('KLIPY_API_KEY is not configured - answering inline query with no results')
+    const tenorApiKey = env.TENOR_API_KEY
+    if (!tenorApiKey) {
+      log.log('TENOR_API_KEY is not configured - answering inline query with no results')
       await ctx.answerInlineQuery([], {
         cache_time: 1,
         is_personal: true,
@@ -474,13 +474,13 @@ export async function startTelegramBot() {
     }
 
     try {
-      const result = await searchKlipyInlineGifs(ctx.inlineQuery.query, {
-        apiKey: klipyApiKey,
-        clientKey: env.KLIPY_CLIENT_KEY || 'otter_sticker_bot',
-        locale: env.KLIPY_LOCALE || 'ru_RU',
-        country: env.KLIPY_COUNTRY || 'US',
-        contentFilter: env.KLIPY_CONTENT_FILTER === 'off' || env.KLIPY_CONTENT_FILTER === 'low' || env.KLIPY_CONTENT_FILTER === 'high'
-          ? env.KLIPY_CONTENT_FILTER
+      const result = await searchTenorInlineGifs(ctx.inlineQuery.query, {
+        apiKey: tenorApiKey,
+        clientKey: env.TENOR_CLIENT_KEY || 'otter_sticker_bot',
+        locale: env.TENOR_LOCALE || 'ru_RU',
+        country: env.TENOR_COUNTRY || 'US',
+        contentFilter: env.TENOR_CONTENT_FILTER === 'off' || env.TENOR_CONTENT_FILTER === 'low' || env.TENOR_CONTENT_FILTER === 'high'
+          ? env.TENOR_CONTENT_FILTER
           : 'medium',
         pos: ctx.inlineQuery.offset,
       })
@@ -492,7 +492,7 @@ export async function startTelegramBot() {
       })
     }
     catch (error) {
-      log.withError(error).withField('query', ctx.inlineQuery.query).log(`Klipy inline query failed: ${errorMessageFrom(error) ?? 'Unknown error'}`)
+      log.withError(error).withField('query', ctx.inlineQuery.query).log(`Tenor inline query failed: ${errorMessageFrom(error) ?? 'Unknown error'}`)
       await ctx.answerInlineQuery([], {
         cache_time: 1,
         is_personal: true,

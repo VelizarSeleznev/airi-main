@@ -1,16 +1,16 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { buildKlipySearchUrl, searchKlipyInlineGifs, toInlineGifResult } from './index'
+import { buildTenorSearchUrl, searchTenorInlineGifs, toInlineGifResult } from './index'
 
-describe('buildKlipySearchUrl', () => {
-  it('keeps the raw search query and Klipy inline defaults', () => {
+describe('buildTenorSearchUrl', () => {
+  it('keeps the raw search query and Tenor inline defaults', () => {
     /**
      * @example
-     * buildKlipySearchUrl('наши мозги думают', { apiKey: 'key' })
+     * buildTenorSearchUrl('наши мозги думают', { apiKey: 'key' })
      */
-    const url = new URL(buildKlipySearchUrl('наши мозги думают', { apiKey: 'key' }))
+    const url = new URL(buildTenorSearchUrl('наши мозги думают', { apiKey: 'key' }))
 
-    expect(url.origin).toBe('https://api.klipy.com')
+    expect(url.origin).toBe('https://tenor.googleapis.com')
     expect(url.pathname).toBe('/v2/search')
     expect(url.searchParams.get('q')).toBe('наши мозги думают')
     expect(url.searchParams.get('key')).toBe('key')
@@ -21,22 +21,22 @@ describe('buildKlipySearchUrl', () => {
     expect(url.searchParams.get('limit')).toBe('20')
   })
 
-  it('passes Telegram pagination through Klipy pos', () => {
+  it('passes Telegram pagination through Tenor pos', () => {
     /**
      * @example
-     * buildKlipySearchUrl('cat', { apiKey: 'key', pos: 'next-page' })
+     * buildTenorSearchUrl('cat', { apiKey: 'key', pos: 'next-page' })
      */
-    const url = new URL(buildKlipySearchUrl('cat', { apiKey: 'key', pos: 'next-page' }))
+    const url = new URL(buildTenorSearchUrl('cat', { apiKey: 'key', pos: 'next-page' }))
 
     expect(url.searchParams.get('pos')).toBe('next-page')
   })
 })
 
 describe('toInlineGifResult', () => {
-  it('builds Telegram GIF results from Klipy tinygif media', () => {
+  it('builds Telegram GIF results from Tenor tinygif media', () => {
     /**
      * @example
-     * toInlineGifResult(klipyResult)
+     * toInlineGifResult(tenorResult)
      */
     const result = toInlineGifResult({
       id: '123',
@@ -44,12 +44,12 @@ describe('toInlineGifResult', () => {
       tags: ['otter', 'thinking'],
       media_formats: {
         tinygif: {
-          url: 'https://media.klipy.com/tiny.gif',
+          url: 'https://media.tenor.com/tiny.gif',
           dims: [220, 160],
           duration: 2.6,
         },
         nanogif: {
-          url: 'https://media.klipy.com/nano.gif',
+          url: 'https://media.tenor.com/nano.gif',
           dims: [90, 66],
           duration: 2.6,
         },
@@ -57,19 +57,19 @@ describe('toInlineGifResult', () => {
     })
 
     expect(result?.type).toBe('gif')
-    expect(result?.id).toBe('klipy-123')
-    expect(result?.gif_url).toBe('https://media.klipy.com/tiny.gif')
-    expect(result?.thumbnail_url).toBe('https://media.klipy.com/nano.gif')
+    expect(result?.id).toBe('tenor-123')
+    expect(result?.gif_url).toBe('https://media.tenor.com/tiny.gif')
+    expect(result?.thumbnail_url).toBe('https://media.tenor.com/nano.gif')
     expect(result?.gif_width).toBe(220)
     expect(result?.gif_height).toBe(160)
     expect(result?.gif_duration).toBe(3)
     expect(result?.title).toBe('thinking otter')
   })
 
-  it('skips Klipy results without usable media URLs', () => {
+  it('skips Tenor results without usable media URLs', () => {
     /**
      * @example
-     * toInlineGifResult(klipyResultWithoutMedia)
+     * toInlineGifResult(tenorResultWithoutMedia)
      */
     const result = toInlineGifResult({
       id: '123',
@@ -80,25 +80,25 @@ describe('toInlineGifResult', () => {
   })
 })
 
-describe('searchKlipyInlineGifs', () => {
-  it('returns an empty result for empty inline queries without calling Klipy', async () => {
+describe('searchTenorInlineGifs', () => {
+  it('returns an empty result for empty inline queries without calling Tenor', async () => {
     /**
      * @example
-     * searchKlipyInlineGifs('', { apiKey: 'key', fetchImpl })
+     * searchTenorInlineGifs('', { apiKey: 'key', fetchImpl })
      */
     const fetchImpl = vi.fn<typeof fetch>()
 
-    const result = await searchKlipyInlineGifs('   ', { apiKey: 'key', fetchImpl })
+    const result = await searchTenorInlineGifs('   ', { apiKey: 'key', fetchImpl })
 
     expect(result.results).toEqual([])
     expect(result.nextOffset).toBe('')
     expect(fetchImpl).not.toHaveBeenCalled()
   })
 
-  it('maps Klipy search responses to Telegram inline results', async () => {
+  it('maps Tenor search responses to Telegram inline results', async () => {
     /**
      * @example
-     * searchKlipyInlineGifs('thinking', { apiKey: 'key', fetchImpl })
+     * searchTenorInlineGifs('thinking', { apiKey: 'key', fetchImpl })
      */
     const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue({
       ok: true,
@@ -110,18 +110,18 @@ describe('searchKlipyInlineGifs', () => {
             id: '123',
             content_description: 'thinking',
             media_formats: {
-              tinygif: { url: 'https://media.klipy.com/tiny.gif', dims: [220, 160] },
-              nanogif: { url: 'https://media.klipy.com/nano.gif', dims: [90, 66] },
+              tinygif: { url: 'https://media.tenor.com/tiny.gif', dims: [220, 160] },
+              nanogif: { url: 'https://media.tenor.com/nano.gif', dims: [90, 66] },
             },
           },
         ],
       }),
     } as Response)
 
-    const result = await searchKlipyInlineGifs('thinking', { apiKey: 'key', fetchImpl })
+    const result = await searchTenorInlineGifs('thinking', { apiKey: 'key', fetchImpl })
 
     expect(result.nextOffset).toBe('next-cursor')
     expect(result.results).toHaveLength(1)
-    expect(result.results[0].gif_url).toBe('https://media.klipy.com/tiny.gif')
+    expect(result.results[0].gif_url).toBe('https://media.tenor.com/tiny.gif')
   })
 })
